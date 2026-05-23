@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
-const pdfParse = require('pdf-parse');;
+import pdfParse from 'pdf-parse';
 import { Assignment } from '../models/Assignment';
 import { GeneratedPaper } from '../models/GeneratedPaper';
 import { generationQueue } from '../queues/generation.queue';
@@ -13,17 +13,35 @@ const upload = multer({
 export const uploadMiddleware = upload.single('file');
 
 export const createAssignment = async (req: Request, res: Response) => {
-  const { title, subject, grade, dueDate, questionTypes, totalQuestions, totalMarks, additionalInstructions } = req.body;
+  const {
+    title, subject, grade, dueDate,
+    questionTypes, totalQuestions, totalMarks,
+    additionalInstructions,
+    // ── New fields from the form ──
+    questionBreakdown,   // JSON string: [{type, questions, marksEach}]
+  } = req.body;
 
-  // Validation
+  // ── Validation ────────────────────────────────────────────────
   if (!title || !subject || !grade || !dueDate || !questionTypes || !totalQuestions || !totalMarks) {
     return res.status(400).json({ error: 'All required fields must be provided' });
   }
   if (Number(totalQuestions) < 1) return res.status(400).json({ error: 'Questions must be at least 1' });
   if (Number(totalMarks)     < 1) return res.status(400).json({ error: 'Marks must be at least 1' });
-  if (new Date(dueDate) < new Date()) return res.status(400).json({ error: 'Due date must be in future' });
+  if (new Date(dueDate) < new Date()) return res.status(400).json({ error: 'Due date must be in the future' });
 
-  // Extract file text
+  // ── Parse questionBreakdown ───────────────────────────────────
+  let parsedBreakdown: { type: string; questions: number; marksEach: number }[] = [];
+  if (questionBreakdown) {
+    try {
+      parsedBreakdown = typeof questionBreakdown === 'string'
+        ? JSON.parse(questionBreakdown)
+        : questionBreakdown;
+    } catch {
+      parsedBreakdown = [];
+    }
+  }
+
+  // ── Extract file text ─────────────────────────────────────────
   let fileContent: string | undefined;
   let fileName:    string | undefined;
   if (req.file) {
@@ -36,10 +54,12 @@ export const createAssignment = async (req: Request, res: Response) => {
     }
   }
 
+  // ── Save to MongoDB ───────────────────────────────────────────
   const assignment = new Assignment({
     title, subject, grade,
     dueDate:                new Date(dueDate),
     questionTypes:          Array.isArray(questionTypes) ? questionTypes : [questionTypes],
+    questionBreakdown:      parsedBreakdown,
     totalQuestions:         Number(totalQuestions),
     totalMarks:             Number(totalMarks),
     additionalInstructions, fileContent, fileName,
@@ -47,7 +67,10 @@ export const createAssignment = async (req: Request, res: Response) => {
   });
   await assignment.save();
 
-  const job = await generationQueue.add('generate', { assignmentId: assignment._id.toString() });
+  // ── Enqueue job ───────────────────────────────────────────────
+  const job = await generationQueue.add('generate', {
+    assignmentId: assignment._id.toString(),
+  });
   await Assignment.findByIdAndUpdate(assignment._id, { jobId: job.id });
 
   res.status(201).json({
@@ -66,7 +89,7 @@ export const getAssignment = async (req: Request, res: Response) => {
 export const getGeneratedPaper = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  // Try Redis cache first
+  // Redis cache first
   const cached = await redis.get(`paper:${id}`);
   if (cached) return res.json({ source: 'cache', paper: JSON.parse(cached) });
 
