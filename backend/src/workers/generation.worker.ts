@@ -24,12 +24,13 @@ const worker = new Worker(
       if (!assignment) throw new Error('Assignment not found');
       notifyClients(assignmentId, { type: 'STATUS_UPDATE', status: 'processing', progress: 30 });
 
-      // 3. Generate with Gemini
+      // 3. Generate with Gemini — pass full breakdown so marks/questions are exact
       const result = await generateQuestionPaper({
         title:                  assignment.title,
         subject:                assignment.subject,
         grade:                  assignment.grade,
         questionTypes:          assignment.questionTypes,
+        questionBreakdown:      assignment.questionBreakdown,  // ← key addition
         totalQuestions:         assignment.totalQuestions,
         totalMarks:             assignment.totalMarks,
         additionalInstructions: assignment.additionalInstructions,
@@ -37,7 +38,7 @@ const worker = new Worker(
       });
       notifyClients(assignmentId, { type: 'STATUS_UPDATE', status: 'processing', progress: 70 });
 
-      // 4. Save to MongoDB Atlas
+      // 4. Save generated paper to MongoDB
       const paper = new GeneratedPaper({
         assignmentId:  assignment._id,
         examTitle:     result.examTitle,
@@ -53,7 +54,7 @@ const worker = new Worker(
       // 5. Cache in Upstash Redis (24h TTL)
       await redis.set(`paper:${assignmentId}`, JSON.stringify(paper.toObject()), 'EX', 86400);
 
-      // 6. Done — notify frontend
+      // 6. Notify frontend — done!
       await Assignment.findByIdAndUpdate(assignmentId, { status: 'completed' });
       notifyClients(assignmentId, {
         type:     'COMPLETED',
@@ -62,7 +63,10 @@ const worker = new Worker(
         paperId:  paper._id.toString(),
       });
 
+      console.log(`✅ Paper generated for assignment ${assignmentId}`);
+
     } catch (error: any) {
+      console.error(`❌ Generation failed for ${assignmentId}:`, error.message);
       await Assignment.findByIdAndUpdate(assignmentId, { status: 'failed' });
       notifyClients(assignmentId, { type: 'FAILED', status: 'failed', error: error.message });
       throw error;
