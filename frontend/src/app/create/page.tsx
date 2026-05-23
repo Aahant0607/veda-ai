@@ -63,7 +63,7 @@ export default function CreatePage() {
   const { setAssignmentId, setJobStatus, currentAssignmentId, jobStatus, progress } = useStore();
   useWebSocket(currentAssignmentId);
 
-  // ── Derived totals (O(N) Time Complexity) ────────────────────────
+  // ── Derived totals ───────────────────────────────────────────────
   const totalQuestions = questionRows.reduce((s, r) => s + Number(r.questions), 0);
   const totalMarks     = questionRows.reduce((s, r) => s + Number(r.questions) * Number(r.marks), 0);
 
@@ -126,23 +126,32 @@ export default function CreatePage() {
 
     try {
       const fd = new FormData();
+      
+      // Send only the keys the backend originally expected to prevent crashing
       fd.append('title',          `${subject} Assignment`);
-      fd.append('schoolName',     schoolName);
       fd.append('subject',        subject);
       fd.append('grade',          grade);
-      fd.append('timeAllowed',    timeAllowed);
       fd.append('dueDate',        dueDate);
       fd.append('totalQuestions', String(totalQuestions));
       fd.append('totalMarks',     String(totalMarks));
       
-      if (additionalInfo) fd.append('additionalInstructions', additionalInfo);
+      // THE FIX: Bundle the custom new fields into the AI instructions so the backend accepts it
+      const aiPromptBundle = `
+      IMPORTANT FORMATTING REQUIREMENTS:
+      - School/Institution Name: ${schoolName}
+      - Time Allowed: ${timeAllowed}
       
-      // FIX: Appending both questionTypes (for backend validation checks) 
-      // and questionConfig (for AI prompting parameters)
-      questionRows.forEach(r => {
-        fd.append('questionTypes', r.key); 
-        fd.append('questionConfig', JSON.stringify({ type: r.key, count: r.questions, marks: r.marks }));
-      });
+      SPECIFIC QUESTION DISTRIBUTION & MARKS:
+      ${questionRows.map(r => `- Generate ${r.questions} ${r.label}. Each question must be worth ${r.marks} marks.`).join('\n')}
+      
+      ADDITIONAL INSTRUCTIONS:
+      ${additionalInfo || 'None'}
+      `.trim();
+
+      fd.append('additionalInstructions', aiPromptBundle);
+
+      // Append exactly how it used to be so the backend validation passes
+      questionRows.forEach(r => fd.append('questionTypes', r.key));
       
       if (uploadedFile) fd.append('file', uploadedFile);
 
