@@ -12,7 +12,15 @@ import './workers/generation.worker';
 const app    = express();
 const server = http.createServer(app);
 
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+// ── CORS — allow all origins (fixes Vercel ↔ Render mismatch) ────────
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
+
+// ── Handle preflight requests for all routes ──────────────────────────
+app.options('*', cors({ origin: true, credentials: true }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
