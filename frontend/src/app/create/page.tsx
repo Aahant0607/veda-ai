@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { UploadCloud, Plus, ChevronLeft, ChevronRight, X, Loader2, FileText, Sparkles, ChevronDown } from 'lucide-react';
+import { UploadCloud, Plus, ChevronLeft, ChevronRight, X, Loader2, FileText, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { useStore } from '@/store';
@@ -41,6 +41,8 @@ export default function CreatePage() {
   // ── Form fields ──────────────────────────────────────────────────
   const [uploadedFile,    setUploadedFile]    = useState<File | null>(null);
   const [isDragging,      setIsDragging]      = useState(false);
+  const [schoolName,      setSchoolName]      = useState('');
+  const [timeAllowed,     setTimeAllowed]     = useState('');
   const [dueDate,         setDueDate]         = useState('');
   const [subject,         setSubject]         = useState('');
   const [grade,           setGrade]           = useState('');
@@ -61,7 +63,7 @@ export default function CreatePage() {
   const { setAssignmentId, setJobStatus, currentAssignmentId, jobStatus, progress } = useStore();
   useWebSocket(currentAssignmentId);
 
-  // ── Derived totals ───────────────────────────────────────────────
+  // ── Derived totals (O(N) Time Complexity) ────────────────────────
   const totalQuestions = questionRows.reduce((s, r) => s + Number(r.questions), 0);
   const totalMarks     = questionRows.reduce((s, r) => s + Number(r.questions) * Number(r.marks), 0);
 
@@ -104,8 +106,10 @@ export default function CreatePage() {
   // ── Validation ───────────────────────────────────────────────────
   const validate = () => {
     const e: Record<string, string> = {};
+    if (!schoolName) e.schoolName = 'School Name is required';
     if (!subject)  e.subject  = 'Subject is required';
     if (!grade)    e.grade    = 'Grade is required';
+    if (!timeAllowed) e.timeAllowed = 'Time Allowed is required';
     if (!dueDate)  e.dueDate  = 'Due date is required';
     else if (new Date(dueDate) < new Date()) e.dueDate = 'Due date must be in the future';
     if (questionRows.length === 0) e.rows = 'Add at least one question type';
@@ -123,13 +127,19 @@ export default function CreatePage() {
     try {
       const fd = new FormData();
       fd.append('title',          `${subject} Assignment`);
+      fd.append('schoolName',     schoolName);
       fd.append('subject',        subject);
       fd.append('grade',          grade);
+      fd.append('timeAllowed',    timeAllowed);
       fd.append('dueDate',        dueDate);
       fd.append('totalQuestions', String(totalQuestions));
       fd.append('totalMarks',     String(totalMarks));
+      
       if (additionalInfo) fd.append('additionalInstructions', additionalInfo);
-      questionRows.forEach(r => fd.append('questionTypes', r.key));
+      questionRows.forEach(r => {
+        // Appending stringified object to keep track of type, count, and marks explicitly for the backend AI prompt
+        fd.append('questionConfig', JSON.stringify({ type: r.key, count: r.questions, marks: r.marks }));
+      });
       if (uploadedFile) fd.append('file', uploadedFile);
 
       const res = await axios.post(`${API_URL}/api/assignments`, fd, {
@@ -202,6 +212,15 @@ export default function CreatePage() {
         <p className="text-xs text-gray-400 text-center mb-6">Upload images of your preferred document/image</p>
 
         <div className="space-y-5">
+          {/* ── School Name ── */}
+          <div>
+            <label className="block text-sm font-semibold mb-2">School / Institution Name *</label>
+            <input type="text" value={schoolName}
+              onChange={(e) => { setSchoolName(e.target.value); setErrors(p => ({...p, schoolName: ''})); }}
+              placeholder="e.g. Delhi Public School"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-gray-400 transition-colors" />
+            {errors.schoolName && <p className="text-red-500 text-xs mt-1">{errors.schoolName}</p>}
+          </div>
 
           {/* ── Subject + Grade row ── */}
           <div className="grid grid-cols-2 gap-4">
@@ -231,17 +250,26 @@ export default function CreatePage() {
             </div>
           </div>
 
-          {/* ── Due Date ── */}
-          <div>
-            <label className="block text-sm font-semibold mb-2">Due Date *</label>
-            <div className="relative">
-              <input type="date" value={dueDate}
-                onChange={(e) => { setDueDate(e.target.value); setErrors(p => ({...p, dueDate: ''})); }}
-                min={new Date().toISOString().split('T')[0]}
-                placeholder="DD-MM-YYYY"
+          {/* ── Time Allowed & Due Date ── */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2">Time Allowed *</label>
+              <input type="text" value={timeAllowed}
+                onChange={(e) => { setTimeAllowed(e.target.value); setErrors(p => ({...p, timeAllowed: ''})); }}
+                placeholder="e.g. 45 minutes, 3 hours"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-gray-400 transition-colors" />
+              {errors.timeAllowed && <p className="text-red-500 text-xs mt-1">{errors.timeAllowed}</p>}
             </div>
-            {errors.dueDate && <p className="text-red-500 text-xs mt-1">{errors.dueDate}</p>}
+            <div>
+              <label className="block text-sm font-semibold mb-2">Due Date *</label>
+              <div className="relative">
+                <input type="date" value={dueDate}
+                  onChange={(e) => { setDueDate(e.target.value); setErrors(p => ({...p, dueDate: ''})); }}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-gray-400 transition-colors" />
+              </div>
+              {errors.dueDate && <p className="text-red-500 text-xs mt-1">{errors.dueDate}</p>}
+            </div>
           </div>
 
           {/* ── Question Types — DESKTOP ── */}
