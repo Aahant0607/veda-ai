@@ -1,8 +1,98 @@
 'use client';
 
-import { Download, Printer } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Download, Printer, Loader2, AlertCircle } from 'lucide-react';
+import { useStore } from '@/store';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// ── Types ────────────────────────────────────────────────────────
+interface Question {
+  id?: string;
+  type: string;
+  difficulty?: string;
+  questionText: string;
+  marks: number;
+  answer: string;
+}
+
+interface AssignmentData {
+  id: string;
+  schoolName?: string;
+  title: string;
+  subject: string;
+  grade: string;
+  totalMarks: number;
+  timeAllowed?: string;
+  questions: Question[];
+}
 
 export default function OutputPage() {
+  const router = useRouter();
+  const { currentAssignmentId } = useStore();
+  
+  const [data, setData] = useState<AssignmentData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // ── Fetch Assignment Data ───────────────────────────────────────
+  useEffect(() => {
+    if (!currentAssignmentId) {
+      router.push('/'); // Redirect to create page if no ID is found
+      return;
+    }
+
+    const fetchAssignment = async () => {
+      try {
+        setIsLoading(true);
+        const res = await axios.get(`${API_URL}/api/assignments/${currentAssignmentId}`);
+        setData(res.data);
+      } catch (err: any) {
+        console.error('Failed to fetch assignment:', err);
+        setError(err.response?.data?.error || 'Failed to load the assignment.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAssignment();
+  }, [currentAssignmentId, router]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
+        <Loader2 className="animate-spin mb-4" size={32} />
+        <p className="text-sm font-semibold">Loading your generated paper...</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500">
+        <AlertCircle size={48} className="mb-4" />
+        <p className="text-sm font-semibold">{error || 'Assignment not found'}</p>
+        <button 
+          onClick={() => router.push('/')}
+          className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-sm font-semibold"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
+  // Group questions by type to create sections automatically
+  const groupedQuestions = data.questions.reduce((acc, q) => {
+    if (!acc[q.type]) acc[q.type] = [];
+    acc[q.type].push(q);
+    return acc;
+  }, {} as Record<string, Question[]>);
+
+  const sections = Object.entries(groupedQuestions);
+
   return (
     <div className="max-w-4xl mx-auto pb-10">
       <div className="flex justify-end gap-3 mb-6 print:hidden">
@@ -21,12 +111,14 @@ export default function OutputPage() {
 
         {/* Document Header */}
         <div className="text-center border-b-2 border-black pb-6 mb-8">
-          <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">Delhi Public School, Sector-4, Bokaro</h1>
-          <h2 className="text-lg font-bold mt-2">Subject: Science</h2>
-          <p className="text-sm font-semibold mt-1">Class: 8th</p>
+          <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">
+            {data.schoolName || 'Your School Name'}
+          </h1>
+          <h2 className="text-lg font-bold mt-2">Subject: {data.subject}</h2>
+          <p className="text-sm font-semibold mt-1">Class: {data.grade}</p>
           <div className="flex flex-col sm:flex-row justify-between mt-6 text-sm font-semibold gap-2 sm:gap-0">
-            <span>Time Allowed: 45 minutes</span>
-            <span>Maximum Marks: 20</span>
+            <span>Time Allowed: {data.timeAllowed || 'As instructed'}</span>
+            <span>Maximum Marks: {data.totalMarks}</span>
           </div>
         </div>
 
@@ -46,29 +138,40 @@ export default function OutputPage() {
             <div className="border-b border-black flex-1 max-w-xs"></div>
           </div>
           <div className="flex gap-2">
-            <span className="w-28">Class: 8th</span>
+            <span className="w-28">Class: {data.grade}</span>
             <span className="ml-4">Section:</span>
             <div className="border-b border-black w-24"></div>
           </div>
         </div>
 
-        {/* Section A */}
-        <div className="text-center font-bold text-lg mb-6 underline">Section A</div>
-        <div className="space-y-6 text-sm mb-16">
-          <p className="font-bold">Short Answer Questions</p>
-          <p className="italic text-gray-700">Attempt all questions. Each question carries 2 marks.</p>
-          <ol className="list-decimal pl-5 space-y-4 font-medium">
-            <li>[Easy] Define electroplating. Explain its purpose. [2 Marks]</li>
-            <li>[Moderate] What is the role of a conductor in the process of electrolysis? [2 Marks]</li>
-            <li>[Easy] Why does a solution of copper sulfate conduct electricity? [2 Marks]</li>
-            <li>[Moderate] Describe one example of the chemical effect of electric current in daily life. [2 Marks]</li>
-            <li>[Moderate] Explain why electric current is said to have chemical effects. [2 Marks]</li>
-            <li>[Challenging] How is sodium hydroxide prepared during the electrolysis of brine? Write the chemical reaction involved. [2 Marks]</li>
-            <li>[Challenging] What happens at the cathode and anode during the electrolysis of water? Name the gases evolved. [2 Marks]</li>
-            <li>[Easy] Mention the type of current used in electroplating and justify why it is used. [2 Marks]</li>
-            <li>[Moderate] What is the importance of electric current in the field of metallurgy? [2 Marks]</li>
-            <li>[Challenging] Explain with a chemical equation how copper is deposited during the electroplating of an object. [2 Marks]</li>
-          </ol>
+        {/* Sections & Questions */}
+        <div className="mb-16">
+          {sections.map(([type, questions], index) => {
+            const sectionLetter = String.fromCharCode(65 + index); // A, B, C...
+            
+            return (
+              <div key={type} className="mb-10">
+                <div className="text-center font-bold text-lg mb-6 underline">
+                  Section {sectionLetter}
+                </div>
+                <div className="space-y-6 text-sm">
+                  <p className="font-bold">{type}</p>
+                  <p className="italic text-gray-700">Attempt all questions in this section.</p>
+                  <ol className="list-decimal pl-5 space-y-4 font-medium">
+                    {questions.map((q, qIndex) => (
+                      <li key={qIndex} className="leading-relaxed">
+                        {q.difficulty && (
+                          <span className="mr-1 text-gray-600">[{q.difficulty}]</span>
+                        )}
+                        {q.questionText}
+                        <span className="ml-2 whitespace-nowrap">[{q.marks} Marks]</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            );
+          })}
 
           <div className="text-center font-bold mt-10 pt-10 border-t border-gray-300">
             End of Question Paper
@@ -78,52 +181,21 @@ export default function OutputPage() {
         {/* Answer Key */}
         <div className="print:break-before-page border-t-2 border-black pt-10">
           <h3 className="font-bold text-lg mb-6 underline">Answer Key:</h3>
-          <ol className="list-decimal pl-5 space-y-6 text-sm font-medium text-gray-800">
-            <li>
-              Electroplating is the process of depositing a thin layer of metal on the surface of another metal using electric current. Its purpose is to prevent corrosion, improve appearance, or increase thickness.
-            </li>
-            <li>
-              A conductor allows the flow of electric current, causing ions in the electrolyte to move and enabling chemical changes at electrodes.
-            </li>
-            <li>
-              Copper sulfate solution contains free copper and sulfate ions which carry electric charge, thus conducting electricity.
-            </li>
-            <li>
-              An example is the electroplating of silver on jewelry to prevent tarnishing.
-            </li>
-            <li>
-              Electric current causes the movement of ions leading to chemical changes at the electrodes, hence it shows chemical effects.
-            </li>
-            <li>
-              Sodium hydroxide is formed at the cathode during brine electrolysis as water gains electrons:
-              <br />
-              <span className="inline-block mt-2 font-mono bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                2H₂O + 2e⁻ → H₂ + 2OH⁻
-              </span>
-              <br />
-              <span className="inline-block mt-1 font-mono bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                Na⁺ + OH⁻ → NaOH (in solution)
-              </span>
-            </li>
-            <li>
-              At the cathode: water is reduced to hydrogen gas and hydroxide ions.
-              <br />
-              At the anode: water is oxidized to oxygen gas and hydrogen ions.
-            </li>
-            <li>
-              Direct current (DC) is used in electroplating because it flows in one direction consistently, ensuring uniform deposition of metal ions on the object.
-            </li>
-            <li>
-              Electric current is used in metallurgy to extract and purify metals such as aluminium and copper through the process of electrolysis.
-            </li>
-            <li>
-              At the cathode, copper ions in solution gain electrons and deposit as copper metal:
-              <br />
-              <span className="inline-block mt-2 font-mono bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                Cu²⁺ + 2e⁻ → Cu (solid)
-              </span>
-            </li>
-          </ol>
+          
+          {sections.map(([type, questions], index) => (
+            <div key={`ans-${type}`} className="mb-8">
+              <h4 className="font-bold text-md mb-4">Section {String.fromCharCode(65 + index)} - {type}</h4>
+              <ol className="list-decimal pl-5 space-y-6 text-sm font-medium text-gray-800">
+                {questions.map((q, qIndex) => (
+                  <li key={`ans-item-${qIndex}`}>
+                    <div className="leading-relaxed whitespace-pre-wrap">
+                      {q.answer}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
         </div>
 
       </div>
