@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import * as pdfParseLib from 'pdf-parse';
+const pdfParse = (pdfParseLib as any).default || pdfParseLib;
 import { Assignment } from '../models/Assignment';
 import { GeneratedPaper } from '../models/GeneratedPaper';
 import { generationQueue } from '../queues/generation.queue';
