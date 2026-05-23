@@ -1,11 +1,18 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IQuestionBreakdown {
+  type: string;
+  questions: number;
+  marksEach: number;
+}
+
 export interface IAssignment extends Document {
   title: string;
   subject: string;
   grade: string;
   dueDate: Date;
   questionTypes: string[];
+  questionBreakdown: IQuestionBreakdown[];   // ← new: per-type detail
   totalQuestions: number;
   totalMarks: number;
   additionalInstructions?: string;
@@ -22,6 +29,11 @@ const AssignmentSchema = new Schema<IAssignment>(
     grade:                  { type: String, required: true },
     dueDate:                { type: Date,   required: true },
     questionTypes:          [{ type: String }],
+    questionBreakdown: [{
+      type:      { type: String, required: true },
+      questions: { type: Number, required: true },
+      marksEach: { type: Number, required: true },
+    }],
     totalQuestions:         { type: Number, required: true, min: 1 },
     totalMarks:             { type: Number, required: true, min: 1 },
     additionalInstructions: { type: String },
