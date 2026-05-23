@@ -84,10 +84,30 @@ export default function OutputPage() {
     );
   }
 
-  // Group questions by type to create sections automatically
-  const groupedQuestions = data.questions.reduce((acc, q) => {
-    if (!acc[q.type]) acc[q.type] = [];
-    acc[q.type].push(q);
+  // ── O(N) Safe Data Grouping ──────────────────────────────────────
+  // Prevents crash if the AI backend returns undefined/missing questions
+  const questionsArray = Array.isArray(data.questions) ? data.questions : [];
+
+  if (questionsArray.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-orange-500">
+        <AlertCircle size={48} className="mb-4" />
+        <p className="text-sm font-semibold">The AI generated an invalid format. No questions were parsed.</p>
+        <button 
+          onClick={() => router.push('/')}
+          className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-sm font-semibold"
+        >
+          Try Generating Again
+        </button>
+      </div>
+    );
+  }
+
+  const groupedQuestions = questionsArray.reduce((acc, q) => {
+    // Fallback assignment if AI hallucinates the 'type' field
+    const safeType = q.type || 'General Questions';
+    if (!acc[safeType]) acc[safeType] = [];
+    acc[safeType].push(q);
     return acc;
   }, {} as Record<string, Question[]>);
 
@@ -164,7 +184,7 @@ export default function OutputPage() {
                           <span className="mr-1 text-gray-600">[{q.difficulty}]</span>
                         )}
                         {q.questionText}
-                        <span className="ml-2 whitespace-nowrap">[{q.marks} Marks]</span>
+                        <span className="ml-2 whitespace-nowrap">[{q.marks || 0} Marks]</span>
                       </li>
                     ))}
                   </ol>
@@ -189,7 +209,7 @@ export default function OutputPage() {
                 {questions.map((q, qIndex) => (
                   <li key={`ans-item-${qIndex}`}>
                     <div className="leading-relaxed whitespace-pre-wrap">
-                      {q.answer}
+                      {q.answer || 'Answer not provided by AI.'}
                     </div>
                   </li>
                 ))}
