@@ -136,10 +136,14 @@ export default function CreatePage() {
       fd.append('totalMarks',     String(totalMarks));
       
       if (additionalInfo) fd.append('additionalInstructions', additionalInfo);
+      
+      // FIX: Appending both questionTypes (for backend validation checks) 
+      // and questionConfig (for AI prompting parameters)
       questionRows.forEach(r => {
-        // Appending stringified object to keep track of type, count, and marks explicitly for the backend AI prompt
+        fd.append('questionTypes', r.key); 
         fd.append('questionConfig', JSON.stringify({ type: r.key, count: r.questions, marks: r.marks }));
       });
+      
       if (uploadedFile) fd.append('file', uploadedFile);
 
       const res = await axios.post(`${API_URL}/api/assignments`, fd, {
