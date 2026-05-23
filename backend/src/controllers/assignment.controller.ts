@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
-import * as pdfParseLib from 'pdf-parse';
-const pdfParse = (pdfParseLib as any).default || pdfParseLib;
 import { Assignment } from '../models/Assignment';
 import { GeneratedPaper } from '../models/GeneratedPaper';
 import { generationQueue } from '../queues/generation.queue';
@@ -13,13 +11,29 @@ const upload = multer({
 });
 export const uploadMiddleware = upload.single('file');
 
+// ── Safe PDF parser — handles all import styles ──────────────────────
+async function extractFileText(file: Express.Multer.File): Promise<string | undefined> {
+  if (file.mimetype === 'application/pdf') {
+    try {
+      // Dynamically import to avoid build-time call signature issues
+      const pdfParse = require('pdf-parse');
+      const fn = pdfParse.default || pdfParse;
+      const data = await fn(file.buffer);
+      return data.text;
+    } catch {
+      return undefined;
+    }
+  }
+  // Plain text or image — just return as string
+  return file.buffer.toString('utf-8');
+}
+
 export const createAssignment = async (req: Request, res: Response) => {
   const {
     title, subject, grade, dueDate,
     questionTypes, totalQuestions, totalMarks,
     additionalInstructions,
-    // ── New fields from the form ──
-    questionBreakdown,   // JSON string: [{type, questions, marksEach}]
+    questionBreakdown,
   } = req.body;
 
   // ── Validation ────────────────────────────────────────────────
@@ -42,17 +56,12 @@ export const createAssignment = async (req: Request, res: Response) => {
     }
   }
 
-  // ── Extract file text ─────────────────────────────────────────
+  // ── Extract file text safely ──────────────────────────────────
   let fileContent: string | undefined;
   let fileName:    string | undefined;
   if (req.file) {
-    fileName = req.file.originalname;
-    if (req.file.mimetype === 'application/pdf') {
-      const data = await pdfParse(req.file.buffer);
-      fileContent = data.text;
-    } else {
-      fileContent = req.file.buffer.toString('utf-8');
-    }
+    fileName    = req.file.originalname;
+    fileContent = await extractFileText(req.file);
   }
 
   // ── Save to MongoDB ───────────────────────────────────────────
