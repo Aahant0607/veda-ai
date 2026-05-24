@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, MoreVertical, Plus, Filter, FileX, ChevronDown, RefreshCw } from 'lucide-react';
+import { Search, MoreVertical, Plus, Filter, FileX, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import EmptyState from '@/components/EmptyState';
@@ -8,7 +8,6 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// ── Added 'pending' and 'submitted' as filter options ────────────────
 type FilterOption = 'latest' | 'oldest' | 'alphabetical' | 'pending' | 'submitted';
 
 interface Assignment {
@@ -62,16 +61,11 @@ export default function DashboardPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [openMenuIndex]);
 
-  // ── Handle Submit: Instantly updates Frontend & Sidebar ────────────
   const submit = async (id: string) => {
-    // 1. Instantly update the card to 'submitted' on the frontend
     setAssignments(prev => prev.map(a => a._id === id ? { ...a, status: 'submitted' } : a));
     setOpenMenuIndex(null);
-    
-    // 2. Instantly tell the Sidebar & BottomNav to decrease their count
     window.dispatchEvent(new Event('assignmentSubmitted'));
     
-    // 3. Send update to backend quietly in the background
     try {
       await axios.patch(`${API_URL}/api/assignments/${id}`, { status: 'submitted' });
     } catch (error) {
@@ -90,32 +84,27 @@ export default function DashboardPage() {
     } catch { return iso; }
   };
 
-  // ── Apply Status Filters, Search, and Sort ─────────────────────────
   const filtered = useMemo(() => {
     const lowerQuery = searchQuery.toLowerCase(); 
     
-    // 1. Remove failed items
     let result = assignments.filter(a => a.status !== 'failed');
     
-    // 2. Apply text search
     result = result.filter(a =>
       a.title.toLowerCase().includes(lowerQuery) ||
       a.subject.toLowerCase().includes(lowerQuery)
     );
     
-    // 3. Apply Status Filter if selected
     if (activeFilter === 'pending') {
       result = result.filter(a => ['completed', 'pending', 'processing'].includes(a.status));
     } else if (activeFilter === 'submitted') {
       result = result.filter(a => a.status === 'submitted');
     }
     
-    // 4. Apply Sorting
     result.sort((a, b) => {
       if (activeFilter === 'alphabetical') return a.title.localeCompare(b.title);
       const da = new Date(a.createdAt).getTime();
       const db = new Date(b.createdAt).getTime();
-      return activeFilter === 'oldest' ? da - db : db - da; // default to latest for status filters
+      return activeFilter === 'oldest' ? da - db : db - da; 
     });
     
     return result;
@@ -184,11 +173,6 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold mb-1">Assignments</h1>
           <p className="text-gray-500 text-sm">Manage and create assignments for your classes.</p>
         </div>
-        <button onClick={fetchAssignments}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border bg-orange-50 text-[#E1502E] border-orange-100 hover:bg-orange-100 transition shadow-sm">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
       </div>
 
       {assignments.length > 0 && (
