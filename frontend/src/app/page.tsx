@@ -2,7 +2,7 @@
 
 import { Search, MoreVertical, Plus, Filter, FileX, ChevronDown, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import EmptyState from '@/components/EmptyState';
 import axios from 'axios';
 
@@ -19,20 +19,20 @@ interface Assignment {
   dueDate: string;
 }
 
-// ── Status config ────────────────────────────────────────────────────
+// ── Status config (Updated to show 'completed' as Pending) ───────────
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  completed:  { label: 'Submitted',      color: 'bg-green-100  text-green-700'  },
-  processing: { label: 'Generating...',  color: 'bg-blue-100   text-blue-700'   },
-  pending:    { label: 'Not Submitted',  color: 'bg-yellow-100 text-yellow-700' },
-  failed:     { label: 'Not Generated',  color: 'bg-red-100    text-red-600'    },
+  completed:  { label: 'Pending',       color: 'bg-yellow-100 text-yellow-700' }, 
+  processing: { label: 'Generating...', color: 'bg-blue-100   text-blue-700'   },
+  pending:    { label: 'In Queue',      color: 'bg-gray-100   text-gray-600'   },
+  failed:     { label: 'Not Generated', color: 'bg-red-100    text-red-600'    },
 };
 
 export default function DashboardPage() {
-  const [assignments,   setAssignments]   = useState<Assignment[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [sortBy,        setSortBy]        = useState<SortOption>('latest');
-  const [filterOpen,    setFilterOpen]    = useState(false);
+  const [assignments,    setAssignments]   = useState<Assignment[]>([]);
+  const [loading,        setLoading]       = useState(true);
+  const [searchQuery,    setSearchQuery]   = useState('');
+  const [sortBy,         setSortBy]        = useState<SortOption>('latest');
+  const [filterOpen,     setFilterOpen]    = useState(false);
   const [openMenuIndex, setOpenMenuIndex] = useState<number | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -71,17 +71,21 @@ export default function DashboardPage() {
     } catch { return iso; }
   };
 
-  const filtered = assignments
-    .filter(a =>
-      a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.subject.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === 'alphabetical') return a.title.localeCompare(b.title);
-      const da = new Date(a.createdAt).getTime();
-      const db = new Date(b.createdAt).getTime();
-      return sortBy === 'latest' ? db - da : da - db;
-    });
+  const filtered = useMemo(() => {
+    const lowerQuery = searchQuery.toLowerCase(); 
+    
+    return assignments
+      .filter(a =>
+        a.title.toLowerCase().includes(lowerQuery) ||
+        a.subject.toLowerCase().includes(lowerQuery)
+      )
+      .sort((a, b) => {
+        if (sortBy === 'alphabetical') return a.title.localeCompare(b.title);
+        const da = new Date(a.createdAt).getTime();
+        const db = new Date(b.createdAt).getTime();
+        return sortBy === 'latest' ? db - da : da - db;
+      });
+  }, [assignments, searchQuery, sortBy]);
 
   const StatusBadge = ({ status }: { status: string }) => {
     const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-gray-100 text-gray-500' };
@@ -128,7 +132,6 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col min-h-[70vh]">
-
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -183,7 +186,6 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500 font-medium">Loading assignments...</p>
           </div>
         </div>
-
       ) : assignments.length === 0 ? (
         <EmptyState
           icon={<FileX size={40} className="text-red-400" />}
@@ -192,7 +194,6 @@ export default function DashboardPage() {
           buttonText="Create Your First Assignment"
           buttonLink="/create"
         />
-
       ) : filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center mt-10">
           <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-gray-400">
@@ -204,7 +205,6 @@ export default function DashboardPage() {
             Clear Search
           </button>
         </div>
-
       ) : (
         <>
           {/* Desktop grid */}
