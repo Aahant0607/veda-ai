@@ -41,7 +41,11 @@ export default function DashboardPage() {
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/api/assignments`);
+      // 🔥 THE FIX: We added a unique timestamp to the end of the URL.
+      // This completely destroys the cache and forces a fresh database pull every time.
+      const timestamp = new Date().getTime();
+      const res = await axios.get(`${API_URL}/api/assignments?t=${timestamp}`);
+      
       setAssignments(res.data || []);
     } catch {
       setAssignments([]);
