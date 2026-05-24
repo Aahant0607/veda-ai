@@ -9,14 +9,18 @@ import './workers/generation.worker';
 const app    = express();
 const server = http.createServer(app);
 
-// ── Manual CORS — works with any origin, no package needed ───────────
+// ── Corrected Manual CORS ────────────────────────────────────────────
 app.use((req: Request, res: Response, next: NextFunction) => {
-  res.header('Access-Control-Allow-Origin',      '*');
-  res.header('Access-Control-Allow-Methods',     'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers',     'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  // Browsers block '*' when credentials are true. We must echo the exact origin.
+  const origin = req.headers.origin || '*';
+  
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Credentials', 'true');
+  
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.status(200).end();
     return;
   }
   next();
@@ -26,6 +30,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/assignments', assignmentRoutes);
+
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
