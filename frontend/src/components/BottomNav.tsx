@@ -12,20 +12,18 @@ export default function BottomNav() {
   const pathname = usePathname();
   const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
-  // ── Count assignments that are NOT completed ─────────────────────
   useEffect(() => {
     axios.get(`${API_URL}/api/assignments`)
       .then(res => {
-        // "Not submitted" = pending or processing only
+        // Counts assignments that are in queue, processing, or ready for review (completed)
         const count = (res.data || []).filter(
-          (a: any) => a.status === 'pending' || a.status === 'processing'
+          (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
         ).length;
         setNotSubmittedCount(count);
       })
       .catch(() => setNotSubmittedCount(0));
   }, [pathname]);
 
-  // Moved inside component to react to state changes
   const navItems = [
     { label: 'Home',                 href: '/home',    icon: Home },
     { label: 'My Groups',            href: '/groups',  icon: Users },
@@ -35,7 +33,6 @@ export default function BottomNav() {
   ];
 
   return (
-    // Added `lg:hidden` to ensure it hides when the Sidebar takes over
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-center justify-around px-1 pt-2 pb-5 lg:hidden print:hidden">
       {navItems.map(({ label, href, icon: Icon, badge }) => {
         const active =
@@ -54,7 +51,6 @@ export default function BottomNav() {
                 className={active ? 'text-[#E1502E]' : 'text-gray-400'}
                 strokeWidth={active ? 2.5 : 1.8}
               />
-              {/* Absolute positioning for mobile badge */}
               {badge != null && badge > 0 && (
                 <span className="absolute -top-1 -right-2 bg-[#E1502E] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm border-[1.5px] border-white">
                   {badge}
