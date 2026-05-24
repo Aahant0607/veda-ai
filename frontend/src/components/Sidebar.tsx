@@ -13,15 +13,25 @@ export default function Sidebar() {
   const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
   useEffect(() => {
-    axios.get(`${API_URL}/api/assignments`)
-      .then(res => {
-        // Counts assignments that are in queue, processing, or ready for review (completed)
-        const count = (res.data || []).filter(
-          (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
-        ).length;
-        setNotSubmittedCount(count);
-      })
-      .catch(() => setNotSubmittedCount(0));
+    // Fetches initial count from the backend
+    const fetchCount = () => {
+      axios.get(`${API_URL}/api/assignments`)
+        .then(res => {
+          const count = (res.data || []).filter(
+            (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
+          ).length;
+          setNotSubmittedCount(count);
+        })
+        .catch(() => setNotSubmittedCount(0));
+    };
+
+    fetchCount(); 
+
+    // Instantly drops the counter by 1 when user clicks "Submit" in Dashboard
+    const handleSubmission = () => setNotSubmittedCount(prev => Math.max(0, prev - 1));
+
+    window.addEventListener('assignmentSubmitted', handleSubmission);
+    return () => window.removeEventListener('assignmentSubmitted', handleSubmission);
   }, [pathname]);
 
   const navItems = [
@@ -34,8 +44,6 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden lg:flex w-[260px] min-h-[calc(100vh-32px)] sticky top-4 bg-white rounded-[2rem] shadow-sm flex-col p-5 print:hidden shrink-0">
-
-      {/* Logo */}
       <div className="flex items-center gap-2 mb-8 px-2 mt-2">
         <div className="bg-[#E1502E] text-white p-1.5 rounded-xl font-bold text-xl leading-none flex items-center justify-center w-8 h-8 shadow-md">
           V
@@ -43,7 +51,6 @@ export default function Sidebar() {
         <span className="font-extrabold text-2xl tracking-tight">VedaAI</span>
       </div>
 
-      {/* Create Button */}
       <Link href="/create"
         className="bg-[#1C1C1C] text-white rounded-2xl py-3 px-4 flex items-center gap-3 mb-8 hover:bg-black transition-colors shadow-md">
         <div className="bg-[#E1502E] rounded-full p-1">
@@ -52,7 +59,6 @@ export default function Sidebar() {
         <span className="font-semibold text-sm">Create Assignment</span>
       </Link>
 
-      {/* Navigation */}
       <nav className="flex flex-col gap-1 flex-1">
         {navItems.map((item) => {
           const isActive =
@@ -69,7 +75,6 @@ export default function Sidebar() {
                 {item.icon}
                 <span className="text-sm">{item.label}</span>
               </div>
-              {/* Only show badge if count > 0 */}
               {item.badge != null && item.badge > 0 && (
                 <span className="bg-[#E1502E] text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
                   {item.badge}
@@ -80,7 +85,6 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="mt-auto flex flex-col gap-4 pt-8">
         <Link href="/settings"
           className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-gray-500 hover:bg-gray-50 hover:text-gray-900">
