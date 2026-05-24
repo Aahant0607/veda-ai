@@ -6,38 +6,45 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://veda-ai-backend-img7.onrender.com';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
   useEffect(() => {
-    // Fetches initial count from the backend
-    const fetchCount = () => {
-      axios.get(`${API_URL}/api/assignments`)
-        .then(res => {
-          const count = (res.data || []).filter(
-            (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
-          ).length;
-          setNotSubmittedCount(count);
-        })
-        .catch(() => setNotSubmittedCount(0));
+    const fetchCount = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/assignments`, {
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        
+        const count = (res.data || []).filter(
+          (a: any) => ['completed', 'pending', 'processing'].includes(a.status)
+        ).length;
+        
+        setNotSubmittedCount(count);
+      } catch (err) {
+        console.error("Failed to fetch assignment count:", err);
+        setNotSubmittedCount(0);
+      }
     };
 
-    fetchCount(); 
+    fetchCount();
 
-    // Instantly drops the counter by 1 when user clicks "Submit" in Dashboard
-    const handleSubmission = () => setNotSubmittedCount(prev => Math.max(0, prev - 1));
+    // Listen for submission events from dashboard
+    const handleSubmission = () => {
+      setNotSubmittedCount(prev => Math.max(0, prev - 1));
+    };
 
     window.addEventListener('assignmentSubmitted', handleSubmission);
     return () => window.removeEventListener('assignmentSubmitted', handleSubmission);
   }, [pathname]);
 
   const navItems = [
-    { icon: <Home size={20} />,     label: 'Home',                 href: '/home'    },
-    { icon: <Users size={20} />,    label: 'My Groups',            href: '/groups'  },
-    { icon: <BookOpen size={20} />, label: 'Assignments',          href: '/',       badge: notSubmittedCount },
+    { icon: <Home size={20} />,     label: 'Home',                 href: '/home' },
+    { icon: <Users size={20} />,    label: 'My Groups',            href: '/groups' },
+    { icon: <BookOpen size={20} />, label: 'Assignments',          href: '/', badge: notSubmittedCount },
     { icon: <Wrench size={20} />,   label: "AI Teacher's Toolkit", href: '/toolkit' },
     { icon: <Library size={20} />,  label: 'My Library',           href: '/library' },
   ];
@@ -51,26 +58,29 @@ export default function Sidebar() {
         <span className="font-extrabold text-2xl tracking-tight">VedaAI</span>
       </div>
 
-      <Link href="/create"
-        className="bg-[#1C1C1C] text-white rounded-2xl py-3 px-4 flex items-center gap-3 mb-8 hover:bg-black transition-colors shadow-md">
+      <Link
+        href="/create"
+        className="bg-[#1C1C1C] text-white rounded-2xl py-3 px-4 flex items-center gap-3 mb-8 hover:bg-black transition-colors shadow-md"
+      >
         <div className="bg-[#E1502E] rounded-full p-1">
           <Plus size={16} strokeWidth={3} />
         </div>
         <span className="font-semibold text-sm">Create Assignment</span>
       </Link>
 
-      <nav className="flex flex-col gap-1 flex-1">
+      <nav className="space-y-1 flex-1">
         {navItems.map((item) => {
-          const isActive =
-            pathname === item.href ||
-            (pathname.startsWith('/output') && item.href === '/');
+          const isActive = pathname === item.href;
           return (
-            <Link key={item.label} href={item.href}
+            <Link
+              key={item.label}
+              href={item.href}
               className={`flex items-center justify-between px-3 py-3 rounded-xl transition-colors ${
                 isActive
                   ? 'bg-gray-100 text-black font-semibold'
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-              }`}>
+              }`}
+            >
               <div className="flex items-center gap-3">
                 {item.icon}
                 <span className="text-sm">{item.label}</span>
@@ -86,21 +96,18 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto flex flex-col gap-4 pt-8">
-        <Link href="/settings"
-          className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-gray-500 hover:bg-gray-50 hover:text-gray-900">
+        <Link
+          href="/settings"
+          className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+        >
           <Settings size={20} />
           <span className="text-sm">Settings</span>
         </Link>
-        <Link href="/settings"
-          className="bg-gray-50 rounded-2xl p-3 flex items-center gap-3 border border-gray-100 hover:bg-gray-100 transition w-full text-left">
-          <div className="w-10 h-10 rounded-full bg-orange-200 flex-shrink-0 overflow-hidden">
-            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
-          </div>
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-bold truncate text-gray-900">Delhi Public School</span>
-            <span className="text-xs text-gray-500 truncate">Bokaro Steel City</span>
-          </div>
-        </Link>
+
+        <div className="bg-gray-50 rounded-2xl p-4 text-xs">
+          <div className="font-medium">Delhi Public School</div>
+          <div className="text-gray-500">Bokaro Steel City</div>
+        </div>
       </div>
     </aside>
   );
