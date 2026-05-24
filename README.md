@@ -1,10 +1,6 @@
 # VedaAI 🚀
 
-**AI-Powered Assignment & Assessment Platform** 
-
-<div align="center">
-[🌐 Live Demo](https://veda-ai-swart-seven.vercel.app)
-</div>
+**AI-Powered Assignment Platform** 
 
 A modern full-stack educational platform that automates assignment creation, submission, grading, and feedback using **Google Gemini AI**. Designed for teachers and institutions to scale quality education effortlessly.
 
