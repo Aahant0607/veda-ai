@@ -12,13 +12,13 @@ export interface IAssignment extends Document {
   grade: string;
   dueDate: Date;
   questionTypes: string[];
-  questionBreakdown: IQuestionBreakdown[];   // ← new: per-type detail
+  questionBreakdown: IQuestionBreakdown[];
   totalQuestions: number;
   totalMarks: number;
   additionalInstructions?: string;
   fileContent?: string;
   fileName?: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'submitted'; // ← added 'submitted'
   jobId?: string;
 }
 
@@ -41,7 +41,7 @@ const AssignmentSchema = new Schema<IAssignment>(
     fileName:               { type: String },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'completed', 'failed'],
+      enum: ['pending', 'processing', 'completed', 'failed', 'submitted'], // ← added 'submitted'
       default: 'pending',
     },
     jobId: { type: String },
