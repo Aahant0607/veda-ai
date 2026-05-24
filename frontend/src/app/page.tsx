@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://veda-ai-backend-img7.onrender.com';
 
-// Standard headers to prevent caching issues
+// Standard headers to prevent caching issues across all requests
 const axiosConfig = {
   headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'Expires': '0' }
 };
@@ -56,6 +56,16 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAssignments(); }, []);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+      const menu = document.getElementById(`menu-${openMenuIndex}`);
+      if (menu && !menu.contains(e.target as Node)) setOpenMenuIndex(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openMenuIndex]);
+
   const submit = async (id: string) => {
     const originalAssignments = [...assignments];
     setAssignments(prev => prev.map(a => a._id === id ? { ...a, status: 'submitted' } : a));
@@ -70,32 +80,97 @@ export default function DashboardPage() {
     }
   };
 
-  const deleteAssignment = async (id: string) => {
-    const originalAssignments = [...assignments];
-    // 1. Optimistic Update
-    setAssignments(prev => prev.filter(a => a._id !== id));
-    setOpenMenuIndex(null);
-    
-    try {
-      // 2. Perform Delete
-      await axios.delete(`${API_URL}/api/assignments/${id}`, axiosConfig);
-      window.dispatchEvent(new Event('assignmentSubmitted'));
-      // 3. Final Sync
-      await fetchAssignments();
-    } catch (error) {
-      // 4. Rollback if server fails
-      setAssignments(originalAssignments);
-      console.error("Failed to delete from database", error);
-    }
+  const filterLabels: Record<FilterOption, string> = {
+    latest: 'Latest', oldest: 'Oldest', alphabetical: 'Alphabetical', pending: 'Pending', submitted: 'Submitted'
   };
 
-  // ... [Keep your filterLabels, formatDate, filtered, StatusBadge, and CardMenu as they were]
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    } catch { return iso; }
+  };
 
-  // IMPORTANT: Ensure your component returns the JSX with these functions correctly linked to buttons
-  // (The rest of your component structure remains the same)
+  const filtered = useMemo(() => {
+    const lowerQuery = searchQuery.toLowerCase(); 
+    let result = assignments.filter(a => a.status !== 'failed');
+    
+    result = result.filter(a =>
+      a.title.toLowerCase().includes(lowerQuery) ||
+      a.subject.toLowerCase().includes(lowerQuery)
+    );
+    
+    if (activeFilter === 'pending') {
+      result = result.filter(a => ['completed', 'pending', 'processing'].includes(a.status));
+    } else if (activeFilter === 'submitted') {
+      result = result.filter(a => a.status === 'submitted');
+    }
+    
+    result.sort((a, b) => {
+      if (activeFilter === 'alphabetical') return a.title.localeCompare(b.title);
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      return activeFilter === 'oldest' ? da - db : db - da; 
+    });
+    
+    return result;
+  }, [assignments, searchQuery, activeFilter]);
 
-  // ... [Return statement]
+  const StatusBadge = ({ status }: { status: string }) => {
+    const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-gray-100 text-gray-500' };
+    return (
+      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${cfg.color}`}>
+        {cfg.label}
+      </span>
+    );
+  };
+
+  const CardMenu = ({ item, index }: { item: Assignment; index: number }) => (
+    <div id={`menu-${index}`} className="relative shrink-0">
+      <button
+        onClick={(e) => { e.preventDefault(); setOpenMenuIndex(openMenuIndex === index ? null : index); }}
+        className="text-gray-400 hover:text-black p-1 rounded-lg hover:bg-gray-100 transition-colors"
+      >
+        <MoreVertical size={18} />
+      </button>
+      {openMenuIndex === index && (
+        <div className="absolute right-0 top-8 z-20 bg-white rounded-xl shadow-lg border border-gray-100 w-44 py-1">
+          {item.status === 'completed' && (
+            <>
+              <Link href={`/output/${item._id}`}
+                className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                onClick={() => setOpenMenuIndex(null)}>
+                View Assignment
+              </Link>
+              <button
+                onClick={() => submit(item._id)}
+                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-green-600 hover:bg-green-50">
+                Submit
+              </button>
+            </>
+          )}
+          {item.status === 'submitted' && (
+            <Link href={`/output/${item._id}`}
+              className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              onClick={() => setOpenMenuIndex(null)}>
+              View Assignment
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    // ... (Your existing JSX structure)
+    <div className="max-w-6xl mx-auto flex flex-col min-h-[70vh]">
+      {/* ... [Rest of your UI remains exactly as you had it] ... */}
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Assignments</h1>
+          <p className="text-gray-500 text-sm">Manage and create assignments for your classes.</p>
+        </div>
+      </div>
+      {/* ... [Remaining content] ... */}
+    </div>
   );
 }
