@@ -2,42 +2,43 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Download, Printer, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Printer, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 const DIFF_BADGE: Record<string, string> = {
-  easy:   'bg-emerald-100 text-emerald-700',
-  medium: 'bg-amber-100  text-amber-700',
-  hard:   'bg-red-100    text-red-700',
+  easy:   'bg-emerald-100 text-emerald-700 border-emerald-200',
+  medium: 'bg-amber-100  text-amber-700  border-amber-200',
+  hard:   'bg-red-100    text-red-700    border-red-200',
 };
 
 interface Question {
-  id: string;
-  text: string;
-  type: string;
+  id:         string;
+  text:       string;
+  type:       string;
   difficulty: 'easy' | 'medium' | 'hard';
-  marks: number;
-  options?: string[];
+  marks:      number;
+  options?:   string[];
+  answer?:    string;
 }
 
 interface Section {
-  name: string;
-  title: string;
-  instruction: string;
+  name:       string;
+  title:      string;
+  instruction:string;
   totalMarks: number;
-  questions: Question[];
+  questions:  Question[];
 }
 
 interface Paper {
-  examTitle: string;
-  subject: string;
-  grade: string;
-  duration: string;
+  examTitle:  string;
+  subject:    string;
+  grade:      string;
+  duration:   string;
   totalMarks: number;
-  dueDate: string;
-  sections: Section[];
+  dueDate:    string;
+  sections:   Section[];
 }
 
 export default function OutputPage() {
@@ -51,8 +52,7 @@ export default function OutputPage() {
 
   useEffect(() => {
     if (!id) { router.push('/create'); return; }
-
-    const fetch = async () => {
+    const load = async () => {
       try {
         setLoading(true);
         const res = await axios.get(`${API_URL}/api/assignments/${id}/paper`);
@@ -63,8 +63,7 @@ export default function OutputPage() {
         setLoading(false);
       }
     };
-
-    fetch();
+    load();
   }, [id, router]);
 
   if (loading) return (
@@ -95,18 +94,14 @@ export default function OutputPage() {
           <RefreshCw size={16} /> New Paper
         </button>
         <button onClick={() => window.print()}
-          className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-50 transition-colors">
-          <Printer size={16} /> Print
-        </button>
-        <button onClick={() => window.print()}
           className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-800 transition-colors">
-          <Download size={16} /> Download PDF
+          <Printer size={16} /> Print / Save PDF
         </button>
       </div>
 
-      <div className="bg-white rounded-none sm:rounded-xl shadow-sm p-6 sm:p-16 text-black print:p-0 print:shadow-none min-h-[1056px]">
+      <div className="bg-white rounded-none sm:rounded-xl shadow-sm p-6 sm:p-16 text-black print:p-0 print:shadow-none">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="text-center border-b-2 border-black pb-6 mb-8">
           <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">{paper.examTitle}</h1>
           <h2 className="text-lg font-bold mt-2">Subject: {paper.subject}</h2>
@@ -117,10 +112,12 @@ export default function OutputPage() {
           </div>
         </div>
 
-        {/* Instructions */}
-        <p className="text-sm font-bold italic mb-6">All questions are compulsory unless stated otherwise.</p>
+        {/* ── Instructions ── */}
+        <p className="text-sm font-bold italic mb-6">
+          All questions are compulsory unless stated otherwise.
+        </p>
 
-        {/* Student fields */}
+        {/* ── Student fields ── */}
         <div className="space-y-3 mb-10 text-sm font-semibold">
           {['Name', 'Roll Number'].map(f => (
             <div key={f} className="flex gap-2">
@@ -135,51 +132,70 @@ export default function OutputPage() {
           </div>
         </div>
 
-        {/* Sections */}
-        <div className="space-y-10 mb-16">
+        {/* ════════════════════════════════════════
+            ALL QUESTIONS — section by section
+        ════════════════════════════════════════ */}
+        <div className="space-y-10 mb-8">
           {paper.sections.map((section) => (
             <div key={section.name}>
-              <div className="text-center font-bold text-lg mb-2 underline">{section.name}</div>
-              <p className="font-bold text-sm mb-1">{section.title}</p>
-              <p className="italic text-gray-600 text-sm mb-4">{section.instruction}</p>
-              <div className="space-y-4">
+              {/* Section header */}
+              <div className="text-center font-bold text-lg mb-1 underline">
+                {section.name}
+              </div>
+              <p className="font-bold text-sm text-center mb-1">{section.title}</p>
+              <p className="italic text-gray-600 text-sm mb-5 border-l-4 border-gray-200 pl-3">
+                {section.instruction}
+              </p>
+
+              {/* Questions */}
+              <div className="space-y-5">
                 {section.questions.map((q, qi) => (
                   <div key={q.id} className="flex gap-3">
-                    <span className="text-gray-500 font-bold min-w-[28px] text-sm">Q{qi + 1}.</span>
+                    <span className="text-gray-500 font-bold min-w-[32px] text-sm pt-0.5">
+                      Q{qi + 1}.
+                    </span>
                     <div className="flex-1">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm leading-relaxed">{q.text}</p>
+                        <p className="text-sm leading-relaxed font-medium">{q.text}</p>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${DIFF_BADGE[q.difficulty] || DIFF_BADGE.medium}`}>
+                          <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${DIFF_BADGE[q.difficulty] || DIFF_BADGE.medium}`}>
                             {q.difficulty?.charAt(0).toUpperCase() + q.difficulty?.slice(1)}
                           </span>
-                          <span className="text-xs text-gray-500 font-semibold">[{q.marks}M]</span>
+                          <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">
+                            [{q.marks}M]
+                          </span>
                         </div>
                       </div>
 
                       {/* MCQ options */}
                       {q.options && q.options.length > 0 && (
-                        <div className="mt-2 grid grid-cols-2 gap-1">
+                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                           {q.options.map((opt, oi) => (
                             <p key={oi} className="text-sm text-gray-700">
-                              <span className="text-gray-400">({String.fromCharCode(65 + oi)})</span> {opt}
+                              <span className="text-gray-400 font-semibold">
+                                ({String.fromCharCode(65 + oi)})
+                              </span> {opt}
                             </p>
                           ))}
                         </div>
                       )}
 
                       {/* True/False */}
-                      {q.type === 'True/False' && (
+                      {q.type === 'True/False' && !q.options && (
                         <div className="mt-2 flex gap-6 text-sm text-gray-600">
-                          <label className="flex items-center gap-2"><input type="radio" name={`tf-${q.id}`} /> True</label>
-                          <label className="flex items-center gap-2"><input type="radio" name={`tf-${q.id}`} /> False</label>
+                          <label className="flex items-center gap-2">
+                            <input type="radio" name={`tf-${q.id}`} /> True
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input type="radio" name={`tf-${q.id}`} /> False
+                          </label>
                         </div>
                       )}
 
                       {/* Answer lines */}
                       {!q.options && q.type !== 'True/False' && (
-                        <div className="mt-2 space-y-2">
-                          {Array.from({ length: q.marks > 2 ? 4 : 2 }).map((_, li) => (
+                        <div className="mt-3 space-y-2">
+                          {Array.from({ length: q.marks > 3 ? 5 : 3 }).map((_, li) => (
                             <div key={li} className="border-b border-gray-200 h-6" />
                           ))}
                         </div>
@@ -188,16 +204,95 @@ export default function OutputPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-right text-xs text-gray-400 mt-3 font-semibold">
+
+              <p className="text-right text-xs text-gray-400 mt-4 font-semibold">
                 [{section.totalMarks} Marks]
               </p>
             </div>
           ))}
         </div>
 
+        {/* End of paper */}
         <div className="text-center font-bold border-t border-gray-200 pt-6 text-sm">
           *** End of Question Paper ***
         </div>
+
+        {/* ════════════════════════════════════════
+            ALL ANSWERS — after all questions
+        ════════════════════════════════════════ */}
+        <div className="print:break-before-page border-t-2 border-black pt-10 mt-12">
+          <h3 className="font-bold text-xl mb-8 underline text-center tracking-wide">
+            Answer Key
+          </h3>
+
+          {/* Flat numbered list across all sections */}
+          {(() => {
+            // Flatten all questions from all sections into one list
+            const allQA: { q: Question; sectionName: string; sectionTitle: string; globalIndex: number }[] = [];
+            let globalIndex = 1;
+            paper.sections.forEach(section => {
+              section.questions.forEach(q => {
+                allQA.push({
+                  q,
+                  sectionName:  section.name,
+                  sectionTitle: section.title,
+                  globalIndex:  globalIndex++,
+                });
+              });
+            });
+
+            // Group by section for display
+            let currentSection = '';
+            return allQA.map(({ q, sectionName, sectionTitle, globalIndex }) => (
+              <div key={`ans-${q.id}`}>
+                {/* Section divider */}
+                {sectionName !== currentSection && (() => {
+                  currentSection = sectionName;
+                  return (
+                    <h4 className="font-bold text-sm mb-3 mt-6 bg-gray-50 px-4 py-2 rounded-xl first:mt-0">
+                      {sectionName} — {sectionTitle}
+                    </h4>
+                  );
+                })()}
+
+                <div className="flex gap-3 mb-4 pl-2">
+                  <span className="font-bold text-sm text-gray-500 min-w-[32px]">
+                    {globalIndex}.
+                  </span>
+                  <div className="flex-1">
+                    {/* Question for context */}
+                    <p className="text-xs text-gray-400 italic mb-1">{q.text}</p>
+
+                    {/* Answer */}
+                    <p className="text-sm font-semibold text-gray-800">
+                      {q.answer
+                        ? q.answer
+                        : q.type === 'True/False'
+                        ? 'True / False (refer to textbook)'
+                        : q.options && q.options.length > 0
+                        ? `Correct Option: ${q.options[0]}`
+                        : 'Refer to textbook for detailed answer.'}
+                    </p>
+
+                    {/* MCQ — highlight correct option */}
+                    {q.type === 'MCQ' && q.options && q.answer && (
+                      <div className="mt-1 grid grid-cols-2 gap-x-4 text-xs text-gray-400">
+                        {q.options.map((opt, oi) => (
+                          <p key={oi} className={opt === q.answer ? 'text-green-700 font-bold' : ''}>
+                            ({String.fromCharCode(65 + oi)}) {opt}
+                            {opt === q.answer ? ' ✓' : ''}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0 font-medium">[{q.marks}M]</span>
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
+
       </div>
     </div>
   );
