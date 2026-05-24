@@ -12,26 +12,24 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
-  // ── Count assignments that are NOT completed ─────────────────────
   useEffect(() => {
     axios.get(`${API_URL}/api/assignments`)
       .then(res => {
-        // "Not submitted" = pending or processing only
-        // failed = "Not Generated" (different issue, don't count as not submitted)
+        // Counts assignments that are in queue, processing, or ready for review (completed)
         const count = (res.data || []).filter(
-          (a: any) => a.status === 'pending' || a.status === 'processing'
+          (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
         ).length;
         setNotSubmittedCount(count);
       })
       .catch(() => setNotSubmittedCount(0));
-  }, [pathname]); // refetch on every route change
+  }, [pathname]);
 
   const navItems = [
-    { icon: <Home size={20} />,     label: 'Home',                  href: '/home'    },
-    { icon: <Users size={20} />,    label: 'My Groups',             href: '/groups'  },
-    { icon: <BookOpen size={20} />, label: 'Assignments',           href: '/',        badge: notSubmittedCount },
-    { icon: <Wrench size={20} />,   label: "AI Teacher's Toolkit",  href: '/toolkit' },
-    { icon: <Library size={20} />,  label: 'My Library',            href: '/library' },
+    { icon: <Home size={20} />,     label: 'Home',                 href: '/home'    },
+    { icon: <Users size={20} />,    label: 'My Groups',            href: '/groups'  },
+    { icon: <BookOpen size={20} />, label: 'Assignments',          href: '/',       badge: notSubmittedCount },
+    { icon: <Wrench size={20} />,   label: "AI Teacher's Toolkit", href: '/toolkit' },
+    { icon: <Library size={20} />,  label: 'My Library',           href: '/library' },
   ];
 
   return (
