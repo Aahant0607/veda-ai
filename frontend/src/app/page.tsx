@@ -7,20 +7,22 @@ import EmptyState from '@/components/EmptyState';
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-type SortOption = 'latest' | 'oldest' | 'alphabetical';
+
+// ── Added 'pending' and 'submitted' as filter options ────────────────
+type FilterOption = 'latest' | 'oldest' | 'alphabetical' | 'pending' | 'submitted';
 
 interface Assignment {
   _id: string;
   title: string;
   subject: string;
   grade: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'submitted' | 'failed';
   createdAt: string;
   dueDate: string;
 }
 
-// ── Status config (Updated to show 'completed' as Pending) ───────────
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  submitted:  { label: 'Submitted',     color: 'bg-green-100  text-green-700'  },
   completed:  { label: 'Pending',       color: 'bg-yellow-100 text-yellow-700' }, 
   processing: { label: 'Generating...', color: 'bg-blue-100   text-blue-700'   },
   pending:    { label: 'In Queue',      color: 'bg-gray-100   text-gray-600'   },
@@ -31,7 +33,7 @@ export default function DashboardPage() {
   const [assignments,    setAssignments]   = useState<Assignment[]>([]);
   const [loading,        setLoading]       = useState(true);
   const [searchQuery,    setSearchQuery]   = useState('');
-  const [sortBy,         setSortBy]        = useState<SortOption>('latest');
+  const [activeFilter,   setActiveFilter]  = useState<FilterOption>('latest');
   const [filterOpen,     setFilterOpen]    = useState(false);
   const [openMenuIndex, setOpenMenuIndex] = useState<number | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -60,8 +62,25 @@ export default function DashboardPage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [openMenuIndex]);
 
-  const sortLabels: Record<SortOption, string> = {
-    latest: 'Latest', oldest: 'Oldest', alphabetical: 'Alphabetical',
+  // ── Handle Submit: Instantly updates Frontend & Sidebar ────────────
+  const submit = async (id: string) => {
+    // 1. Instantly update the card to 'submitted' on the frontend
+    setAssignments(prev => prev.map(a => a._id === id ? { ...a, status: 'submitted' } : a));
+    setOpenMenuIndex(null);
+    
+    // 2. Instantly tell the Sidebar & BottomNav to decrease their count
+    window.dispatchEvent(new Event('assignmentSubmitted'));
+    
+    // 3. Send update to backend quietly in the background
+    try {
+      await axios.patch(`${API_URL}/api/assignments/${id}`, { status: 'submitted' });
+    } catch (error) {
+      console.error("Failed to sync submission with backend", error);
+    }
+  };
+
+  const filterLabels: Record<FilterOption, string> = {
+    latest: 'Latest', oldest: 'Oldest', alphabetical: 'Alphabetical', pending: 'Pending', submitted: 'Submitted'
   };
 
   const formatDate = (iso: string) => {
@@ -71,21 +90,36 @@ export default function DashboardPage() {
     } catch { return iso; }
   };
 
+  // ── Apply Status Filters, Search, and Sort ─────────────────────────
   const filtered = useMemo(() => {
     const lowerQuery = searchQuery.toLowerCase(); 
     
-    return assignments
-      .filter(a =>
-        a.title.toLowerCase().includes(lowerQuery) ||
-        a.subject.toLowerCase().includes(lowerQuery)
-      )
-      .sort((a, b) => {
-        if (sortBy === 'alphabetical') return a.title.localeCompare(b.title);
-        const da = new Date(a.createdAt).getTime();
-        const db = new Date(b.createdAt).getTime();
-        return sortBy === 'latest' ? db - da : da - db;
-      });
-  }, [assignments, searchQuery, sortBy]);
+    // 1. Remove failed items
+    let result = assignments.filter(a => a.status !== 'failed');
+    
+    // 2. Apply text search
+    result = result.filter(a =>
+      a.title.toLowerCase().includes(lowerQuery) ||
+      a.subject.toLowerCase().includes(lowerQuery)
+    );
+    
+    // 3. Apply Status Filter if selected
+    if (activeFilter === 'pending') {
+      result = result.filter(a => ['completed', 'pending', 'processing'].includes(a.status));
+    } else if (activeFilter === 'submitted') {
+      result = result.filter(a => a.status === 'submitted');
+    }
+    
+    // 4. Apply Sorting
+    result.sort((a, b) => {
+      if (activeFilter === 'alphabetical') return a.title.localeCompare(b.title);
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      return activeFilter === 'oldest' ? da - db : db - da; // default to latest for status filters
+    });
+    
+    return result;
+  }, [assignments, searchQuery, activeFilter]);
 
   const StatusBadge = ({ status }: { status: string }) => {
     const cfg = STATUS_CONFIG[status] || { label: status, color: 'bg-gray-100 text-gray-500' };
@@ -106,25 +140,38 @@ export default function DashboardPage() {
       </button>
       {openMenuIndex === index && (
         <div className="absolute right-0 top-8 z-20 bg-white rounded-xl shadow-lg border border-gray-100 w-44 py-1">
+          
           {item.status === 'completed' && (
-            <Link href={`/output/${item._id}`}
-              className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              onClick={() => setOpenMenuIndex(null)}>
-              View Assignment
-            </Link>
+            <>
+              <Link href={`/output/${item._id}`}
+                className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                onClick={() => setOpenMenuIndex(null)}>
+                View Assignment
+              </Link>
+              <button
+                onClick={() => submit(item._id)}
+                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-green-600 hover:bg-green-50">
+                Submit
+              </button>
+            </>
           )}
-          {(item.status === 'failed' || item.status === 'pending') && (
-            <Link href="/create"
-              className="block px-4 py-2.5 text-sm font-semibold text-blue-600 hover:bg-blue-50"
-              onClick={() => setOpenMenuIndex(null)}>
-              Regenerate
-            </Link>
+
+          {item.status !== 'completed' && (
+            <>
+              {item.status === 'submitted' && (
+                 <Link href={`/output/${item._id}`}
+                 className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                 onClick={() => setOpenMenuIndex(null)}>
+                 View Assignment
+               </Link>
+              )}
+              <button
+                onClick={() => { setAssignments(p => p.filter(a => a._id !== item._id)); setOpenMenuIndex(null); }}
+                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50">
+                Delete
+              </button>
+            </>
           )}
-          <button
-            onClick={() => { setAssignments(p => p.filter(a => a._id !== item._id)); setOpenMenuIndex(null); }}
-            className="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50">
-            Delete
-          </button>
         </div>
       )}
     </div>
@@ -132,7 +179,6 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col min-h-[70vh]">
-      {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-2xl font-bold mb-1">Assignments</h1>
@@ -145,7 +191,6 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Toolbar */}
       {assignments.length > 0 && (
         <div className="flex justify-between items-center mb-6 gap-3">
           <div className="relative" ref={filterRef}>
@@ -153,17 +198,17 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-gray-500 hover:text-black bg-white px-3 py-2 rounded-xl shadow-sm">
               <Filter size={14} />
               <span className="hidden sm:inline">Filter By</span>
-              <span className="text-[#E1502E] font-bold">{sortLabels[sortBy]}</span>
+              <span className="text-[#E1502E] font-bold">{filterLabels[activeFilter]}</span>
               <ChevronDown size={13} className={`transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
             </button>
             {filterOpen && (
               <div className="absolute top-10 left-0 z-20 bg-white rounded-2xl shadow-lg border border-gray-100 w-40 py-1">
-                {(['latest', 'oldest', 'alphabetical'] as SortOption[]).map(opt => (
-                  <button key={opt} onClick={() => { setSortBy(opt); setFilterOpen(false); }}
+                {(Object.keys(filterLabels) as FilterOption[]).map(opt => (
+                  <button key={opt} onClick={() => { setActiveFilter(opt); setFilterOpen(false); }}
                     className={`w-full text-left px-4 py-2.5 text-sm font-semibold ${
-                      sortBy === opt ? 'text-[#E1502E] bg-orange-50' : 'text-gray-600 hover:bg-gray-50'
+                      activeFilter === opt ? 'text-[#E1502E] bg-orange-50' : 'text-gray-600 hover:bg-gray-50'
                     }`}>
-                    {sortLabels[opt]}
+                    {filterLabels[opt]}
                   </button>
                 ))}
               </div>
@@ -178,7 +223,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* States */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -200,20 +244,19 @@ export default function DashboardPage() {
             <Search size={24} />
           </div>
           <h3 className="text-lg font-bold">No matches found</h3>
-          <p className="text-gray-500 text-sm mt-1">No assignments matching "{searchQuery}"</p>
-          <button onClick={() => setSearchQuery('')} className="mt-4 text-[#E1502E] text-sm font-semibold hover:underline">
-            Clear Search
+          <p className="text-gray-500 text-sm mt-1">Adjust filters or search term to see more.</p>
+          <button onClick={() => {setSearchQuery(''); setActiveFilter('latest')}} className="mt-4 text-[#E1502E] text-sm font-semibold hover:underline">
+            Clear Filters
           </button>
         </div>
       ) : (
         <>
-          {/* Desktop grid */}
           <div className="hidden sm:grid sm:grid-cols-2 gap-4 mb-10">
             {filtered.map((item, index) => (
               <div key={item._id}
                 className="relative bg-white rounded-[1.5rem] p-6 shadow-sm border border-transparent hover:border-gray-200 hover:shadow-md transition-all flex flex-col justify-between h-44 group">
                 <div className="flex justify-between items-start">
-                  <Link href={item.status === 'completed' ? `/output/${item._id}` : '#'} className="flex-1">
+                  <Link href={item.status === 'completed' || item.status === 'submitted' ? `/output/${item._id}` : '#'} className="flex-1">
                     <h3 className="font-bold text-lg group-hover:text-[#E1502E] transition-colors leading-tight">
                       {item.title}
                     </h3>
@@ -232,11 +275,10 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Mobile list */}
           <div className="flex sm:hidden flex-col gap-0 mb-6 bg-white rounded-2xl overflow-hidden shadow-sm divide-y divide-gray-100">
             {filtered.map((item, index) => (
               <div key={item._id} className="relative flex items-center justify-between px-4 py-4 hover:bg-gray-50 group">
-                <Link href={item.status === 'completed' ? `/output/${item._id}` : '#'} className="flex-1 min-w-0 pr-3">
+                <Link href={item.status === 'completed' || item.status === 'submitted' ? `/output/${item._id}` : '#'} className="flex-1 min-w-0 pr-3">
                   <p className="font-bold text-sm group-hover:text-[#E1502E] transition-colors truncate">{item.title}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{item.subject} • Grade {item.grade}</p>
                   <div className="flex items-center gap-3 mt-1.5">
@@ -249,7 +291,6 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Create button */}
           <div className="mt-auto pb-4 flex justify-center">
             <Link href="/create"
               className="bg-black text-white px-6 py-3 rounded-full flex items-center gap-2 text-sm font-bold shadow-lg hover:scale-105 transition-transform">
