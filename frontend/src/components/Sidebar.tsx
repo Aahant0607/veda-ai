@@ -10,26 +10,28 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
-  // ── Fetch count of non-completed assignments ──────────────────
+  // ── Count assignments that are NOT completed ─────────────────────
   useEffect(() => {
     axios.get(`${API_URL}/api/assignments`)
       .then(res => {
-        const pending = res.data.filter(
-          (a: any) => a.status !== 'completed'
+        // "Not submitted" = pending or processing only
+        // failed = "Not Generated" (different issue, don't count as not submitted)
+        const count = (res.data || []).filter(
+          (a: any) => a.status === 'pending' || a.status === 'processing'
         ).length;
-        setPendingCount(pending);
+        setNotSubmittedCount(count);
       })
-      .catch(() => setPendingCount(null));
-  }, [pathname]); // refetch when route changes
+      .catch(() => setNotSubmittedCount(0));
+  }, [pathname]); // refetch on every route change
 
   const navItems = [
-    { icon: <Home size={20} />,    label: 'Home',                 href: '/home'    },
-    { icon: <Users size={20} />,   label: 'My Groups',            href: '/groups'  },
-    { icon: <BookOpen size={20} />,label: 'Assignments',          href: '/',        badge: pendingCount },
-    { icon: <Wrench size={20} />,  label: "AI Teacher's Toolkit", href: '/toolkit' },
-    { icon: <Library size={20} />, label: 'My Library',           href: '/library' },
+    { icon: <Home size={20} />,     label: 'Home',                  href: '/home'    },
+    { icon: <Users size={20} />,    label: 'My Groups',             href: '/groups'  },
+    { icon: <BookOpen size={20} />, label: 'Assignments',           href: '/',        badge: notSubmittedCount },
+    { icon: <Wrench size={20} />,   label: "AI Teacher's Toolkit",  href: '/toolkit' },
+    { icon: <Library size={20} />,  label: 'My Library',            href: '/library' },
   ];
 
   return (
@@ -61,7 +63,9 @@ export default function Sidebar() {
           return (
             <Link key={item.label} href={item.href}
               className={`flex items-center justify-between px-3 py-3 rounded-xl transition-colors ${
-                isActive ? 'bg-gray-100 text-black font-semibold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                isActive
+                  ? 'bg-gray-100 text-black font-semibold'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
               }`}>
               <div className="flex items-center gap-3">
                 {item.icon}
@@ -69,7 +73,7 @@ export default function Sidebar() {
               </div>
               {/* Only show badge if count > 0 */}
               {item.badge != null && item.badge > 0 && (
-                <span className="bg-[#E1502E] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-[#E1502E] text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
                   {item.badge}
                 </span>
               )}
