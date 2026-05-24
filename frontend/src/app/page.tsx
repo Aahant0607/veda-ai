@@ -73,6 +73,22 @@ export default function DashboardPage() {
     }
   };
 
+  const deleteAssignment = async (id: string) => {
+    // 1. Instantly remove from the dashboard UI
+    setAssignments(prev => prev.filter(a => a._id !== id));
+    setOpenMenuIndex(null);
+    
+    // 2. Reuse the custom event to instantly drop the Sidebar count if it was pending
+    window.dispatchEvent(new Event('assignmentSubmitted'));
+    
+    // 3. Permanently delete it from the backend database
+    try {
+      await axios.delete(`${API_URL}/api/assignments/${id}`);
+    } catch (error) {
+      console.error("Failed to delete from database", error);
+    }
+  };
+
   const filterLabels: Record<FilterOption, string> = {
     latest: 'Latest', oldest: 'Oldest', alphabetical: 'Alphabetical', pending: 'Pending', submitted: 'Submitted'
   };
@@ -119,6 +135,7 @@ export default function DashboardPage() {
     );
   };
 
+  // ── FIX: Delete button is now available on ALL statuses ──────────────
   const CardMenu = ({ item, index }: { item: Assignment; index: number }) => (
     <div id={`menu-${index}`} className="relative shrink-0">
       <button
@@ -145,22 +162,21 @@ export default function DashboardPage() {
             </>
           )}
 
-          {item.status !== 'completed' && (
-            <>
-              {item.status === 'submitted' && (
-                 <Link href={`/output/${item._id}`}
-                 className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                 onClick={() => setOpenMenuIndex(null)}>
-                 View Assignment
-               </Link>
-              )}
-              <button
-                onClick={() => { setAssignments(p => p.filter(a => a._id !== item._id)); setOpenMenuIndex(null); }}
-                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50">
-                Delete
-              </button>
-            </>
+          {item.status === 'submitted' && (
+            <Link href={`/output/${item._id}`}
+              className="block px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              onClick={() => setOpenMenuIndex(null)}>
+              View Assignment
+            </Link>
           )}
+
+          {/* Delete is now outside the conditions so it ALWAYS shows up */}
+          <button
+            onClick={() => deleteAssignment(item._id)}
+            className="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50">
+            Delete
+          </button>
+          
         </div>
       )}
     </div>
