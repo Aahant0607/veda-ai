@@ -1,223 +1,203 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, Printer, Loader2, AlertCircle } from 'lucide-react';
-import { useStore } from '@/store';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { Download, Printer, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// ── Types ────────────────────────────────────────────────────────
+const DIFF_BADGE: Record<string, string> = {
+  easy:   'bg-emerald-100 text-emerald-700',
+  medium: 'bg-amber-100  text-amber-700',
+  hard:   'bg-red-100    text-red-700',
+};
+
 interface Question {
-  id?: string;
+  id: string;
+  text: string;
   type: string;
-  difficulty?: string;
-  questionText: string;
+  difficulty: 'easy' | 'medium' | 'hard';
   marks: number;
-  answer: string;
+  options?: string[];
 }
 
-interface AssignmentData {
-  id: string;
-  schoolName?: string;
+interface Section {
+  name: string;
   title: string;
-  subject: string;
-  grade: string;
+  instruction: string;
   totalMarks: number;
-  timeAllowed?: string;
   questions: Question[];
 }
 
+interface Paper {
+  examTitle: string;
+  subject: string;
+  grade: string;
+  duration: string;
+  totalMarks: number;
+  dueDate: string;
+  sections: Section[];
+}
+
 export default function OutputPage() {
-  const router = useRouter();
-  const { currentAssignmentId } = useStore();
-  
-  const [data, setData] = useState<AssignmentData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const params  = useParams();
+  const router  = useRouter();
+  const id      = params?.id as string;
 
-  // ── Fetch Assignment Data ───────────────────────────────────────
+  const [paper,   setPaper]   = useState<Paper | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+
   useEffect(() => {
-    if (!currentAssignmentId) {
-      router.push('/'); // Redirect to create page if no ID is found
-      return;
-    }
+    if (!id) { router.push('/create'); return; }
 
-    const fetchAssignment = async () => {
+    const fetch = async () => {
       try {
-        setIsLoading(true);
-        const res = await axios.get(`${API_URL}/api/assignments/${currentAssignmentId}`);
-        setData(res.data);
+        setLoading(true);
+        const res = await axios.get(`${API_URL}/api/assignments/${id}/paper`);
+        setPaper(res.data.paper);
       } catch (err: any) {
-        console.error('Failed to fetch assignment:', err);
-        setError(err.response?.data?.error || 'Failed to load the assignment.');
+        setError(err.response?.data?.error || 'Failed to load paper.');
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
-    fetchAssignment();
-  }, [currentAssignmentId, router]);
+    fetch();
+  }, [id, router]);
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
-        <Loader2 className="animate-spin mb-4" size={32} />
-        <p className="text-sm font-semibold">Loading your generated paper...</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <Loader2 className="animate-spin text-gray-400 mb-4" size={36} />
+      <p className="text-sm font-semibold text-gray-500">Loading your question paper...</p>
+    </div>
+  );
 
-  if (error || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500">
-        <AlertCircle size={48} className="mb-4" />
-        <p className="text-sm font-semibold">{error || 'Assignment not found'}</p>
-        <button 
-          onClick={() => router.push('/')}
-          className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-sm font-semibold"
-        >
-          Go Back
-        </button>
-      </div>
-    );
-  }
-
-  // ── O(N) Safe Data Grouping ──────────────────────────────────────
-  // Prevents crash if the AI backend returns undefined/missing questions
-  const questionsArray = Array.isArray(data.questions) ? data.questions : [];
-
-  if (questionsArray.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-orange-500">
-        <AlertCircle size={48} className="mb-4" />
-        <p className="text-sm font-semibold">The AI generated an invalid format. No questions were parsed.</p>
-        <button 
-          onClick={() => router.push('/')}
-          className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-sm font-semibold"
-        >
-          Try Generating Again
-        </button>
-      </div>
-    );
-  }
-
-  const groupedQuestions = questionsArray.reduce((acc, q) => {
-    // Fallback assignment if AI hallucinates the 'type' field
-    const safeType = q.type || 'General Questions';
-    if (!acc[safeType]) acc[safeType] = [];
-    acc[safeType].push(q);
-    return acc;
-  }, {} as Record<string, Question[]>);
-
-  const sections = Object.entries(groupedQuestions);
+  if (error || !paper) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <AlertCircle size={48} className="text-red-400 mb-4" />
+      <p className="text-sm font-semibold text-red-500 mb-4">{error || 'Paper not found'}</p>
+      <button onClick={() => router.push('/create')}
+        className="px-4 py-2 bg-black text-white rounded-xl text-sm font-semibold">
+        Create New Assignment
+      </button>
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto pb-10">
+
+      {/* Action bar */}
       <div className="flex justify-end gap-3 mb-6 print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-50 transition-colors"
-        >
+        <button onClick={() => router.push('/create')}
+          className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-50 transition-colors">
+          <RefreshCw size={16} /> New Paper
+        </button>
+        <button onClick={() => window.print()}
+          className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-50 transition-colors">
           <Printer size={16} /> Print
         </button>
-        <button className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-800 transition-colors">
+        <button onClick={() => window.print()}
+          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-800 transition-colors">
           <Download size={16} /> Download PDF
         </button>
       </div>
 
       <div className="bg-white rounded-none sm:rounded-xl shadow-sm p-6 sm:p-16 text-black print:p-0 print:shadow-none min-h-[1056px]">
 
-        {/* Document Header */}
+        {/* Header */}
         <div className="text-center border-b-2 border-black pb-6 mb-8">
-          <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">
-            {data.schoolName || 'Your School Name'}
-          </h1>
-          <h2 className="text-lg font-bold mt-2">Subject: {data.subject}</h2>
-          <p className="text-sm font-semibold mt-1">Class: {data.grade}</p>
-          <div className="flex flex-col sm:flex-row justify-between mt-6 text-sm font-semibold gap-2 sm:gap-0">
-            <span>Time Allowed: {data.timeAllowed || 'As instructed'}</span>
-            <span>Maximum Marks: {data.totalMarks}</span>
+          <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">{paper.examTitle}</h1>
+          <h2 className="text-lg font-bold mt-2">Subject: {paper.subject}</h2>
+          <p className="text-sm font-semibold mt-1">Class: {paper.grade}</p>
+          <div className="flex flex-col sm:flex-row justify-between mt-6 text-sm font-semibold gap-2">
+            <span>Time Allowed: {paper.duration}</span>
+            <span>Maximum Marks: {paper.totalMarks}</span>
           </div>
         </div>
 
         {/* Instructions */}
-        <div className="mb-6">
-          <p className="text-sm font-bold italic">All questions are compulsory unless stated otherwise.</p>
-        </div>
+        <p className="text-sm font-bold italic mb-6">All questions are compulsory unless stated otherwise.</p>
 
-        {/* Student Detail Fields */}
+        {/* Student fields */}
         <div className="space-y-3 mb-10 text-sm font-semibold">
+          {['Name', 'Roll Number'].map(f => (
+            <div key={f} className="flex gap-2">
+              <span className="w-28">{f}:</span>
+              <div className="border-b border-black flex-1 max-w-xs" />
+            </div>
+          ))}
           <div className="flex gap-2">
-            <span className="w-28">Name:</span>
-            <div className="border-b border-black flex-1 max-w-xs"></div>
-          </div>
-          <div className="flex gap-2">
-            <span className="w-28">Roll Number:</span>
-            <div className="border-b border-black flex-1 max-w-xs"></div>
-          </div>
-          <div className="flex gap-2">
-            <span className="w-28">Class: {data.grade}</span>
+            <span className="w-28">Class: {paper.grade}</span>
             <span className="ml-4">Section:</span>
-            <div className="border-b border-black w-24"></div>
+            <div className="border-b border-black w-24" />
           </div>
         </div>
 
-        {/* Sections & Questions */}
-        <div className="mb-16">
-          {sections.map(([type, questions], index) => {
-            const sectionLetter = String.fromCharCode(65 + index); // A, B, C...
-            
-            return (
-              <div key={type} className="mb-10">
-                <div className="text-center font-bold text-lg mb-6 underline">
-                  Section {sectionLetter}
-                </div>
-                <div className="space-y-6 text-sm">
-                  <p className="font-bold">{type}</p>
-                  <p className="italic text-gray-700">Attempt all questions in this section.</p>
-                  <ol className="list-decimal pl-5 space-y-4 font-medium">
-                    {questions.map((q, qIndex) => (
-                      <li key={qIndex} className="leading-relaxed">
-                        {q.difficulty && (
-                          <span className="mr-1 text-gray-600">[{q.difficulty}]</span>
-                        )}
-                        {q.questionText}
-                        <span className="ml-2 whitespace-nowrap">[{q.marks || 0} Marks]</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
-            );
-          })}
+        {/* Sections */}
+        <div className="space-y-10 mb-16">
+          {paper.sections.map((section) => (
+            <div key={section.name}>
+              <div className="text-center font-bold text-lg mb-2 underline">{section.name}</div>
+              <p className="font-bold text-sm mb-1">{section.title}</p>
+              <p className="italic text-gray-600 text-sm mb-4">{section.instruction}</p>
+              <div className="space-y-4">
+                {section.questions.map((q, qi) => (
+                  <div key={q.id} className="flex gap-3">
+                    <span className="text-gray-500 font-bold min-w-[28px] text-sm">Q{qi + 1}.</span>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm leading-relaxed">{q.text}</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${DIFF_BADGE[q.difficulty] || DIFF_BADGE.medium}`}>
+                            {q.difficulty?.charAt(0).toUpperCase() + q.difficulty?.slice(1)}
+                          </span>
+                          <span className="text-xs text-gray-500 font-semibold">[{q.marks}M]</span>
+                        </div>
+                      </div>
 
-          <div className="text-center font-bold mt-10 pt-10 border-t border-gray-300">
-            End of Question Paper
-          </div>
-        </div>
+                      {/* MCQ options */}
+                      {q.options && q.options.length > 0 && (
+                        <div className="mt-2 grid grid-cols-2 gap-1">
+                          {q.options.map((opt, oi) => (
+                            <p key={oi} className="text-sm text-gray-700">
+                              <span className="text-gray-400">({String.fromCharCode(65 + oi)})</span> {opt}
+                            </p>
+                          ))}
+                        </div>
+                      )}
 
-        {/* Answer Key */}
-        <div className="print:break-before-page border-t-2 border-black pt-10">
-          <h3 className="font-bold text-lg mb-6 underline">Answer Key:</h3>
-          
-          {sections.map(([type, questions], index) => (
-            <div key={`ans-${type}`} className="mb-8">
-              <h4 className="font-bold text-md mb-4">Section {String.fromCharCode(65 + index)} - {type}</h4>
-              <ol className="list-decimal pl-5 space-y-6 text-sm font-medium text-gray-800">
-                {questions.map((q, qIndex) => (
-                  <li key={`ans-item-${qIndex}`}>
-                    <div className="leading-relaxed whitespace-pre-wrap">
-                      {q.answer || 'Answer not provided by AI.'}
+                      {/* True/False */}
+                      {q.type === 'True/False' && (
+                        <div className="mt-2 flex gap-6 text-sm text-gray-600">
+                          <label className="flex items-center gap-2"><input type="radio" name={`tf-${q.id}`} /> True</label>
+                          <label className="flex items-center gap-2"><input type="radio" name={`tf-${q.id}`} /> False</label>
+                        </div>
+                      )}
+
+                      {/* Answer lines */}
+                      {!q.options && q.type !== 'True/False' && (
+                        <div className="mt-2 space-y-2">
+                          {Array.from({ length: q.marks > 2 ? 4 : 2 }).map((_, li) => (
+                            <div key={li} className="border-b border-gray-200 h-6" />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </li>
+                  </div>
                 ))}
-              </ol>
+              </div>
+              <p className="text-right text-xs text-gray-400 mt-3 font-semibold">
+                [{section.totalMarks} Marks]
+              </p>
             </div>
           ))}
         </div>
 
+        <div className="text-center font-bold border-t border-gray-200 pt-6 text-sm">
+          *** End of Question Paper ***
+        </div>
       </div>
     </div>
   );
