@@ -11,23 +11,33 @@ const upload = multer({
 });
 export const uploadMiddleware = upload.single('file');
 
-// ── Safe PDF parser — handles all import styles ──────────────────────
+// ── Safe PDF parser ───────────────────────────────────────────────────
 async function extractFileText(file: Express.Multer.File): Promise<string | undefined> {
   if (file.mimetype === 'application/pdf') {
     try {
-      // Dynamically import to avoid build-time call signature issues
       const pdfParse = require('pdf-parse');
       const fn = pdfParse.default || pdfParse;
       const data = await fn(file.buffer);
       return data.text;
-    } catch {
-      return undefined;
-    }
+    } catch { return undefined; }
   }
-  // Plain text or image — just return as string
   return file.buffer.toString('utf-8');
 }
 
+// ── GET /api/assignments — list all for dashboard ────────────────────
+export const getAllAssignments = async (req: Request, res: Response) => {
+  try {
+    const assignments = await Assignment.find()
+      .select('-fileContent')         // don't send file text to dashboard
+      .sort({ createdAt: -1 })        // newest first
+      .limit(50);
+    res.json(assignments);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch assignments' });
+  }
+};
+
+// ── POST /api/assignments — create new ───────────────────────────────
 export const createAssignment = async (req: Request, res: Response) => {
   const {
     title, subject, grade, dueDate,
@@ -36,7 +46,6 @@ export const createAssignment = async (req: Request, res: Response) => {
     questionBreakdown,
   } = req.body;
 
-  // ── Validation ────────────────────────────────────────────────
   if (!title || !subject || !grade || !dueDate || !questionTypes || !totalQuestions || !totalMarks) {
     return res.status(400).json({ error: 'All required fields must be provided' });
   }
@@ -44,19 +53,15 @@ export const createAssignment = async (req: Request, res: Response) => {
   if (Number(totalMarks)     < 1) return res.status(400).json({ error: 'Marks must be at least 1' });
   if (new Date(dueDate) < new Date()) return res.status(400).json({ error: 'Due date must be in the future' });
 
-  // ── Parse questionBreakdown ───────────────────────────────────
   let parsedBreakdown: { type: string; questions: number; marksEach: number }[] = [];
   if (questionBreakdown) {
     try {
       parsedBreakdown = typeof questionBreakdown === 'string'
         ? JSON.parse(questionBreakdown)
         : questionBreakdown;
-    } catch {
-      parsedBreakdown = [];
-    }
+    } catch { parsedBreakdown = []; }
   }
 
-  // ── Extract file text safely ──────────────────────────────────
   let fileContent: string | undefined;
   let fileName:    string | undefined;
   if (req.file) {
@@ -64,7 +69,6 @@ export const createAssignment = async (req: Request, res: Response) => {
     fileContent = await extractFileText(req.file);
   }
 
-  // ── Save to MongoDB ───────────────────────────────────────────
   const assignment = new Assignment({
     title, subject, grade,
     dueDate:                new Date(dueDate),
@@ -77,7 +81,6 @@ export const createAssignment = async (req: Request, res: Response) => {
   });
   await assignment.save();
 
-  // ── Enqueue job ───────────────────────────────────────────────
   const job = await generationQueue.add('generate', {
     assignmentId: assignment._id.toString(),
   });
@@ -90,20 +93,20 @@ export const createAssignment = async (req: Request, res: Response) => {
   });
 };
 
+// ── GET /api/assignments/:id ─────────────────────────────────────────
 export const getAssignment = async (req: Request, res: Response) => {
   const assignment = await Assignment.findById(req.params.id).select('-fileContent');
   if (!assignment) return res.status(404).json({ error: 'Not found' });
   res.json(assignment);
 };
 
+// ── GET /api/assignments/:id/paper ──────────────────────────────────
 export const getGeneratedPaper = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  // Redis cache first
   const cached = await redis.get(`paper:${id}`);
   if (cached) return res.json({ source: 'cache', paper: JSON.parse(cached) });
 
-  // Fallback to MongoDB
   const paper = await GeneratedPaper.findOne({ assignmentId: id });
   if (!paper) return res.status(404).json({ error: 'Paper not found or still generating' });
 
