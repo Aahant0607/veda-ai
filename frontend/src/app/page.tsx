@@ -6,7 +6,8 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import EmptyState from '@/components/EmptyState';
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Updated to point directly to your live backend if the env var is missing
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://veda-ai-backend-img7.onrender.com';
 
 type FilterOption = 'latest' | 'oldest' | 'alphabetical' | 'pending' | 'submitted';
 
@@ -135,7 +136,6 @@ export default function DashboardPage() {
     );
   };
 
-  // ── FIX: Delete button is now available on ALL statuses ──────────────
   const CardMenu = ({ item, index }: { item: Assignment; index: number }) => (
     <div id={`menu-${index}`} className="relative shrink-0">
       <button
@@ -170,7 +170,6 @@ export default function DashboardPage() {
             </Link>
           )}
 
-          {/* Delete is now outside the conditions so it ALWAYS shows up */}
           <button
             onClick={() => deleteAssignment(item._id)}
             className="w-full text-left px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50">
