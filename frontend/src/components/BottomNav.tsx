@@ -13,15 +13,25 @@ export default function BottomNav() {
   const [notSubmittedCount, setNotSubmittedCount] = useState<number>(0);
 
   useEffect(() => {
-    axios.get(`${API_URL}/api/assignments`)
-      .then(res => {
-        // Counts assignments that are in queue, processing, or ready for review (completed)
-        const count = (res.data || []).filter(
-          (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
-        ).length;
-        setNotSubmittedCount(count);
-      })
-      .catch(() => setNotSubmittedCount(0));
+    // Fetches initial count from the backend
+    const fetchCount = () => {
+      axios.get(`${API_URL}/api/assignments`)
+        .then(res => {
+          const count = (res.data || []).filter(
+            (a: any) => a.status === 'completed' || a.status === 'pending' || a.status === 'processing'
+          ).length;
+          setNotSubmittedCount(count);
+        })
+        .catch(() => setNotSubmittedCount(0));
+    };
+
+    fetchCount(); 
+
+    // Instantly drops the counter by 1 when user clicks "Submit" in Dashboard
+    const handleSubmission = () => setNotSubmittedCount(prev => Math.max(0, prev - 1));
+
+    window.addEventListener('assignmentSubmitted', handleSubmission);
+    return () => window.removeEventListener('assignmentSubmitted', handleSubmission);
   }, [pathname]);
 
   const navItems = [
