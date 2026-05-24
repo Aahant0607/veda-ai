@@ -5,15 +5,17 @@ import {
   getAssignment,
   getGeneratedPaper,
   uploadMiddleware,
-  updateAssignmentStatus // ← added import
+  updateAssignmentStatus,
+  deleteAssignment // ← Added this import!
 } from '../controllers/assignment.controller';
 
 const router = Router();
 
-router.get('/',          getAllAssignments);          // ← Dashboard needs this
+router.get('/',          getAllAssignments);          
 router.post('/',         uploadMiddleware, createAssignment);
 router.get('/:id',       getAssignment);
 router.get('/:id/paper', getGeneratedPaper);
-router.patch('/:id',     updateAssignmentStatus);     // ← added PATCH route
+router.patch('/:id',     updateAssignmentStatus);     
+router.delete('/:id',    deleteAssignment); // ← Added the DELETE route here!
 
 export default router;
