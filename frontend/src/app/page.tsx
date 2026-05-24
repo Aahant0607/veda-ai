@@ -41,8 +41,7 @@ export default function DashboardPage() {
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      // 🔥 THE FIX: We added a unique timestamp to the end of the URL.
-      // This completely destroys the cache and forces a fresh database pull every time.
+      // 🔥 Add a unique timestamp to force a fresh database pull every time
       const timestamp = new Date().getTime();
       const res = await axios.get(`${API_URL}/api/assignments?t=${timestamp}`);
       
@@ -67,14 +66,19 @@ export default function DashboardPage() {
   }, [openMenuIndex]);
 
   const submit = async (id: string) => {
+    // 1. Optimistic UI update
     setAssignments(prev => prev.map(a => a._id === id ? { ...a, status: 'submitted' } : a));
     setOpenMenuIndex(null);
     window.dispatchEvent(new Event('assignmentSubmitted'));
     
     try {
-      await axios.patch(`${API_URL}/api/assignments/${id}`, { status: 'submitted' });
+      // 🔥 Add timestamp to bust cache on the PATCH request
+      const timestamp = new Date().getTime();
+      await axios.patch(`${API_URL}/api/assignments/${id}?t=${timestamp}`, { status: 'submitted' });
     } catch (error) {
       console.error("Failed to sync submission with backend", error);
+      // Re-fetch to revert the UI if the backend request failed
+      fetchAssignments();
     }
   };
 
@@ -88,9 +92,13 @@ export default function DashboardPage() {
     
     // 3. Permanently delete it from the backend database
     try {
-      await axios.delete(`${API_URL}/api/assignments/${id}`);
+      // 🔥 Add timestamp to bust cache on the DELETE request
+      const timestamp = new Date().getTime();
+      await axios.delete(`${API_URL}/api/assignments/${id}?t=${timestamp}`);
     } catch (error) {
       console.error("Failed to delete from database", error);
+      // Re-fetch to bring the deleted item back into the UI if the backend request failed
+      fetchAssignments();
     }
   };
 
