@@ -2,6 +2,9 @@
 
 **AI-Powered Assignment & Assessment Platform** 
 
+<div align="center">
+**[🌐 Live Demo](https://veda-ai-swart-seven.vercel.app/)**
+</div>
 
 A modern full-stack educational platform that automates assignment creation, submission, grading, and feedback using **Google Gemini AI**. Designed for teachers and institutions to scale quality education effortlessly.
 
@@ -53,6 +56,12 @@ A modern full-stack educational platform that automates assignment creation, sub
 - Turborepo-style monorepo structure
 - ESLint + TypeScript strict mode
 - Environment-based configuration
+
+### Deployment
+- **Frontend**: Deployed on **Vercel**
+- **Backend**: Deployed on **Render**
+- **Database**: MongoDB Atlas
+- **Cache/Queue**: Redis (Render)
 
 ---
 
