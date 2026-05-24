@@ -113,3 +113,26 @@ export const getGeneratedPaper = async (req: Request, res: Response) => {
   await redis.set(`paper:${id}`, JSON.stringify(paper.toObject()), 'EX', 86400);
   res.json({ source: 'db', paper });
 };
+
+// ── PATCH /api/assignments/:id ──────────────────────────────────────
+export const updateAssignmentStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // O(1) database lookup and update
+    const updatedAssignment = await Assignment.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+
+    if (!updatedAssignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    res.json(updatedAssignment);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update assignment status' });
+  }
+};
