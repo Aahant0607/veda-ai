@@ -28,8 +28,8 @@ async function extractFileText(file: Express.Multer.File): Promise<string | unde
 export const getAllAssignments = async (req: Request, res: Response) => {
   try {
     const assignments = await Assignment.find()
-      .select('-fileContent')         // don't send file text to dashboard
-      .sort({ createdAt: -1 })        // newest first
+      .select('-fileContent')
+      .sort({ createdAt: -1 })
       .limit(50);
     res.json(assignments);
   } catch (err) {
@@ -50,7 +50,7 @@ export const createAssignment = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'All required fields must be provided' });
   }
   if (Number(totalQuestions) < 1) return res.status(400).json({ error: 'Questions must be at least 1' });
-  if (Number(totalMarks)     < 1) return res.status(400).json({ error: 'Marks must be at least 1' });
+  if (Number(totalMarks) < 1) return res.status(400).json({ error: 'Marks must be at least 1' });
   if (new Date(dueDate) < new Date()) return res.status(400).json({ error: 'Due date must be in the future' });
 
   let parsedBreakdown: { type: string; questions: number; marksEach: number }[] = [];
@@ -63,19 +63,19 @@ export const createAssignment = async (req: Request, res: Response) => {
   }
 
   let fileContent: string | undefined;
-  let fileName:    string | undefined;
+  let fileName: string | undefined;
   if (req.file) {
-    fileName    = req.file.originalname;
+    fileName = req.file.originalname;
     fileContent = await extractFileText(req.file);
   }
 
   const assignment = new Assignment({
     title, subject, grade,
-    dueDate:                new Date(dueDate),
-    questionTypes:          Array.isArray(questionTypes) ? questionTypes : [questionTypes],
-    questionBreakdown:      parsedBreakdown,
-    totalQuestions:         Number(totalQuestions),
-    totalMarks:             Number(totalMarks),
+    dueDate: new Date(dueDate),
+    questionTypes: Array.isArray(questionTypes) ? questionTypes : [questionTypes],
+    questionBreakdown: parsedBreakdown,
+    totalQuestions: Number(totalQuestions),
+    totalMarks: Number(totalMarks),
     additionalInstructions, fileContent, fileName,
     status: 'pending',
   });
@@ -87,9 +87,9 @@ export const createAssignment = async (req: Request, res: Response) => {
   await Assignment.findByIdAndUpdate(assignment._id, { jobId: job.id });
 
   res.status(201).json({
-    message:      'Assignment created. Generating question paper...',
+    message: 'Assignment created. Generating question paper...',
     assignmentId: assignment._id,
-    jobId:        job.id,
+    jobId: job.id,
   });
 };
 
@@ -120,7 +120,6 @@ export const updateAssignmentStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    // O(1) database lookup and update
     const updatedAssignment = await Assignment.findByIdAndUpdate(
       id,
       { status },
@@ -134,5 +133,26 @@ export const updateAssignmentStatus = async (req: Request, res: Response) => {
     res.json(updatedAssignment);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update assignment status' });
+  }
+};
+
+// ── DELETE /api/assignments/:id ──────────────────────────────────────
+export const deleteAssignment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const deletedAssignment = await Assignment.findByIdAndDelete(id);
+
+    if (!deletedAssignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    // Clean up associated data
+    await redis.del(`paper:${id}`);
+    await GeneratedPaper.deleteMany({ assignmentId: id });
+
+    res.status(200).json({ message: 'Assignment deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete assignment' });
   }
 };
